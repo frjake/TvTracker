@@ -22,7 +22,7 @@ accounts. TV metadata from TMDB, cached in SQLite. See `README.md` for setup and
 
 - `npm run dev` – dev server. `npm run check` = lint + typecheck + Vitest. `npm run build` for prod.
 - Schema change → edit `prisma/schema.prisma` → `npm run db:migrate -- --name <what>`.
-- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`); anything importing `server-only` can't be unit-tested there.
+- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`, `people`); anything importing `server-only` can't be unit-tested there.
 
 ## Repo map
 
@@ -40,14 +40,18 @@ src/lib/activity.ts   recordActivity (feed rows), feedFor(viewer), activityFor(u
 src/lib/dates.ts      combineDateWithNow (log ordering), dateKey, formatDate*, timeAgo
 src/lib/profile.ts    loadProfile(username): owner + viewer + followState + canView, memoized per request
 src/lib/reviews.ts    visibleReviewsFor(target, viewerId)
-src/app/actions/      'use server' files: auth, watch (watched/log/rate/review), lists, follows, settings
+src/lib/credits.ts    ensureShowCredits / ensureSeasonCredits / ensureEpisodeCredits (TMDB → Credit rows, replaced per scope),
+                      ensurePerson, ensurePersonFilmography (PersonTvCredit), scanShow/SeasonEpisodeCredits (batched)
+src/lib/people.ts     PURE: isKeyCrew, progressState, parseFilmographyQuery, filterShows/sortShows, filterEpisodes/sortEpisodes, filmographyHref
+src/app/actions/      'use server' files: auth, watch (watched/log/rate/review), lists, follows, settings, credits (scans)
 src/components/       Nav, ShowCard, ScoreBadge, WatchedToggle, RatingControl, LogDialog, ReviewForm,
-                      ReviewList, AddToListMenu, DiaryList, ActivityItem, FollowButton, UserList, forms (TargetFields, SubmitButton)
+                      ReviewList, AddToListMenu, DiaryList, ActivityItem, FollowButton, UserList, forms (TargetFields, SubmitButton),
+                      PersonChip, CreditsSection (groupByPerson, CastGrid, CrewList), CastTable, SortFilterBar
 ```
 
 Routes: `/`, `/search`, `/show/[showId]`, `/show/[showId]/season/[n]`, `.../episode/[e]`, `/log`,
 `/lists/new`, `/lists/[listId]`, `/u/[username]` (+ `/log /reviews /lists /followers /following`),
-`/requests`, `/settings`, `/login`, `/register`.
+`/requests`, `/settings`, `/login`, `/register`, `/person/[personId]`, `/show/[showId]/cast`, `.../season/[n]/cast`.
 
 ## Conventions (keep these true)
 
@@ -73,11 +77,23 @@ Routes: `/`, `/search`, `/show/[showId]`, `/show/[showId]/season/[n]`, `.../epis
    public POST endpoint. Shared helpers go in `src/lib`.
 8. **`Follow.status` and `Activity.type` are strings**; allowed values are in `src/lib/constants.ts`.
 9. After mutations, actions call `revalidatePath("/", "layout")` (simple, whole-app refresh).
-10. Server components can be async and query Prisma directly; client components (`'use client'`)
+10. **Credits.** `Credit` rows for a scope (show = seasonId+episodeId null, season, episode) are
+    deleted and re-created together; `Person` rows are upserted as stubs (name/photo) and filled
+    by `ensurePerson`. Only key crew is stored (`isKeyCrew`: Directing/Writing depts, Creator/EP
+    jobs). Show `created_by` becomes job "Creator". Scans fetch TMDB 10 episodes at a time but
+    write to SQLite sequentially (single connection). Shows > `SCAN_MAX_EPISODES` (300) are
+    scanned per season. Person pages are public; "your" columns need a viewer.
+11. **Show score** = mean of all users' episode ratings (`showAveragesFor`, raw SQL), TMDB
+    fallback. Person-page sorting/filtering is URL-param driven and the logic is in the pure
+    `people.ts` so it stays unit-tested; the page only assembles rows.
+12. Server components can be async and query Prisma directly; client components (`'use client'`)
     call actions via `<form action>` / `useActionState`. `SubmitButton` gives pending state.
 
 ## Gotchas
 
 - `.env` is gitignored and user-owned (TMDB key + `DATABASE_URL`). `.env.example` documents it.
 - Editing a page while a dialog is open resets client state (HMR) — expected in dev.
+- **After a migration / `prisma generate`, restart `next dev`.** The `globalThis` Prisma
+  singleton in `src/lib/db.ts` survives hot reloads, so the running server keeps the OLD client
+  (new models are `undefined` and pages that `.catch(() => [])` silently show nothing).
 - Prisma's `prisma init` dropped agent-skill folders (`.claude/skills`, `.agents`, `.windsurf`, `skills-lock.json`); they are optional reference material, safe to delete.

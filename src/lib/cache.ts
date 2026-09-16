@@ -20,7 +20,8 @@ export async function ensureShow(showId: number): Promise<ShowWithSeasons | null
     where: { id: showId },
     include: { seasons: { orderBy: { seasonNumber: "asc" } } },
   });
-  if (existing && !isStale(existing.fetchedAt)) return existing;
+  // numberOfEpisodes was added later; rows cached before it exist are refreshed once.
+  if (existing && !isStale(existing.fetchedAt) && existing.numberOfEpisodes != null) return existing;
 
   let detail;
   try {
@@ -44,6 +45,7 @@ export async function ensureShow(showId: number): Promise<ShowWithSeasons | null
         firstAirDate: detail.first_air_date || null,
         status: detail.status,
         numberOfSeasons: detail.number_of_seasons,
+        numberOfEpisodes: detail.number_of_episodes,
         tmdbVoteAverage: detail.vote_average,
         fetchedAt: now,
       },
@@ -55,6 +57,7 @@ export async function ensureShow(showId: number): Promise<ShowWithSeasons | null
         firstAirDate: detail.first_air_date || null,
         status: detail.status,
         numberOfSeasons: detail.number_of_seasons,
+        numberOfEpisodes: detail.number_of_episodes,
         tmdbVoteAverage: detail.vote_average,
         fetchedAt: now,
       },

@@ -14,6 +14,13 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
 - **Watched marks** – tick episodes (or a whole season) as already seen without adding them to
   the log.
 - **Lists** – ordered lists of episodes and/or seasons, with notes-free reordering.
+- **Cast & crew** – every show, season and episode lists its cast (plus guest stars on
+  episodes) and key crew (directing, writing, creators, executive producers). Click anyone to
+  see their other shows, sortable by release date, community rating, your rating, billing
+  order, episode count or name, and filterable by watched state (not started / in progress /
+  completed), year range and cast vs. crew. Talk/news/reality shows and one-episode credits
+  are hidden by default (toggleable). "Find their episodes" scans a show's episode credits so
+  the person's individual episodes appear too.
 - **Follows & feed** – follow people to get their activity on your home page. Accounts can be
   made private: follow requests then need approval, and only accepted followers can see the
   profile, log, reviews and lists. Ratings from private accounts still count in averages.
@@ -79,6 +86,12 @@ Prisma 7 + SQLite (`better-sqlite3` driver adapter) · Vitest. Node ≥ 22.
 - **Ratings** – integers 0–100. Each user has at most one *standing* rating per episode or
   season; a rating attached to a log entry updates the standing one. Averages use standing
   ratings only.
+- **Show scores** – a show's community score is the mean of all users' episode ratings for
+  that show (TMDB fallback); "your rating" for a show is the mean of your episode ratings.
+- **Credits cache** – `Person`, `Credit` (per show/season/episode scope) and `PersonTvCredit`
+  (a person's TMDB filmography) rows are cached like the rest of the TMDB data. Episode-level
+  appearances exist only for episodes whose credits have been fetched; the per-show scan
+  fetches them all (10 at a time; shows over 300 episodes are scanned per season).
 - **Log ordering** – `LogEntry.watchedAt` stores the chosen date plus the clock time at which
   you logged it. Only the date is displayed.
 

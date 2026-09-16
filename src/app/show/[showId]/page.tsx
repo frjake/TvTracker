@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CreditsSection } from "@/components/CreditsSection";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { ensureShow } from "@/lib/cache";
+import { ensureShowCredits } from "@/lib/credits";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
-import { seasonAveragesForShow } from "@/lib/scores";
+import { seasonAveragesForShow, showScore } from "@/lib/scores";
 import { imageUrl } from "@/lib/tmdb";
 
 function parseId(raw: string): number | null {
@@ -25,11 +27,14 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
   const show = await ensureShow(id);
   if (!show) notFound();
 
-  const averages = await seasonAveragesForShow(show.id);
+  const [averages, score, credits] = await Promise.all([
+    seasonAveragesForShow(show.id),
+    showScore(show.id, show.tmdbVoteAverage),
+    ensureShowCredits(show.id).catch(() => []),
+  ]);
   const poster = imageUrl(show.posterPath, "w342");
   const backdrop = imageUrl(show.backdropPath, "w1280");
   const year = show.firstAirDate?.slice(0, 4);
-  const showScore = scoreFrom(null, 0, show.tmdbVoteAverage);
 
   return (
     <div className="flex flex-col gap-8">
@@ -53,7 +58,7 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
               {show.status && <span>{show.status}</span>}
               {show.numberOfSeasons != null && <span>{show.numberOfSeasons} season{show.numberOfSeasons === 1 ? "" : "s"}</span>}
             </div>
-            <ScoreBadge score={showScore} size="lg" />
+            <ScoreBadge score={score} tmdbPercent={tmdbPercent(show.tmdbVoteAverage)} size="lg" />
             {show.overview && <p className="max-w-2xl text-sm leading-relaxed">{show.overview}</p>}
           </div>
         </div>
@@ -91,6 +96,8 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
           })}
         </ul>
       </section>
+
+      <CreditsSection credits={credits} seeAllHref={`/show/${show.id}/cast`} />
     </div>
   );
 }

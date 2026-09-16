@@ -51,33 +51,39 @@ model Session {
 // ---------- TMDB cache ----------
 
 model Show {
-  id              Int      @id // TMDB tv id
-  name            String
-  overview        String?
-  posterPath      String?
-  backdropPath    String?
-  firstAirDate    String?
-  status          String?
-  numberOfSeasons Int?
-  tmdbVoteAverage Float?
-  fetchedAt       DateTime @default(now())
+  id                      Int       @id // TMDB tv id
+  name                    String
+  overview                String?
+  posterPath              String?
+  backdropPath            String?
+  firstAirDate            String?
+  status                  String?
+  numberOfSeasons         Int?
+  numberOfEpisodes        Int?
+  tmdbVoteAverage         Float?
+  fetchedAt               DateTime  @default(now())
+  creditsFetchedAt        DateTime? // aggregate credits cached
+  episodeCreditsScannedAt DateTime? // every episode's credits cached
 
   seasons  Season[]
   episodes Episode[]
+  credits  Credit[]
 }
 
 model Season {
-  id                Int       @id // TMDB season id
-  showId            Int
-  seasonNumber      Int
-  name              String
-  overview          String?
-  posterPath        String?
-  airDate           String?
-  episodeCount      Int?
-  tmdbVoteAverage   Float?
-  fetchedAt         DateTime  @default(now())
-  episodesFetchedAt DateTime? // null until ensureSeason() has loaded every episode
+  id                      Int       @id // TMDB season id
+  showId                  Int
+  seasonNumber            Int
+  name                    String
+  overview                String?
+  posterPath              String?
+  airDate                 String?
+  episodeCount            Int?
+  tmdbVoteAverage         Float?
+  fetchedAt               DateTime  @default(now())
+  episodesFetchedAt       DateTime? // null until ensureSeason() has loaded every episode
+  creditsFetchedAt        DateTime?
+  episodeCreditsScannedAt DateTime?
 
   show       Show       @relation(fields: [showId], references: [id], onDelete: Cascade)
   episodes   Episode[]
@@ -85,23 +91,25 @@ model Season {
   reviews    Review[]
   listItems  ListItem[]
   activities Activity[]
+  credits    Credit[]
 
   @@unique([showId, seasonNumber])
 }
 
 model Episode {
-  id              Int      @id // TMDB episode id
-  showId          Int
-  seasonId        Int
-  seasonNumber    Int
-  episodeNumber   Int
-  name            String
-  overview        String?
-  stillPath       String?
-  airDate         String?
-  runtime         Int?
-  tmdbVoteAverage Float?
-  fetchedAt       DateTime @default(now())
+  id               Int       @id // TMDB episode id
+  showId           Int
+  seasonId         Int
+  seasonNumber     Int
+  episodeNumber    Int
+  name             String
+  overview         String?
+  stillPath        String?
+  airDate          String?
+  runtime          Int?
+  tmdbVoteAverage  Float?
+  fetchedAt        DateTime  @default(now())
+  creditsFetchedAt DateTime?
 
   show         Show          @relation(fields: [showId], references: [id], onDelete: Cascade)
   season       Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
@@ -111,6 +119,7 @@ model Episode {
   watchedMarks WatchedMark[]
   listItems    ListItem[]
   activities   Activity[]
+  credits      Credit[]
 
   @@unique([showId, seasonNumber, episodeNumber])
   @@index([seasonId])
@@ -271,4 +280,73 @@ model Activity {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+// ---------- People / credits ----------
+
+model Person {
+  id                   Int       @id // TMDB person id
+  name                 String
+  profilePath          String?
+  knownForDepartment   String?
+  biography            String?
+  birthday             String?
+  deathday             String?
+  placeOfBirth         String?
+  fetchedAt            DateTime? // /person/{id} detail cached
+  filmographyFetchedAt DateTime? // /person/{id}/tv_credits cached
+
+  credits     Credit[]
+  filmography PersonTvCredit[]
+}
+
+/// One row per (person, scope, role). Scope is the show (seasonId and episodeId null),
+/// a season (seasonId set) or an episode (episodeId set). Rows for a scope are replaced
+/// wholesale whenever that scope's credits are (re)fetched. kind: "cast" | "guest" | "crew"
+model Credit {
+  id           String  @id @default(cuid())
+  personId     Int
+  showId       Int
+  seasonId     Int?
+  episodeId    Int?
+  kind         String
+  character    String?
+  job          String?
+  department   String?
+  order        Int? // billing order
+  episodeCount Int? // aggregate (show/season) scopes only
+
+  person  Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  show    Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  season  Season?  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([showId, seasonId, episodeId])
+  @@index([personId, episodeId])
+  @@index([episodeId])
+  @@index([seasonId])
+}
+
+/// Cached /person/{id}/tv_credits. `showId` is a TMDB id with NO foreign key: the Show row
+/// usually is not cached yet. Pages look Show rows up by id when they need them.
+/// kind: "cast" | "crew". genreIds: comma-separated TMDB genre ids.
+model PersonTvCredit {
+  id              String  @id @default(cuid())
+  personId        Int
+  showId          Int
+  kind            String
+  character       String?
+  job             String?
+  department      String?
+  episodeCount    Int
+  showName        String
+  posterPath      String?
+  firstAirDate    String?
+  tmdbVoteAverage Float?
+  genreIds        String
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([showId])
 }

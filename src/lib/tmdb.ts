@@ -44,11 +44,18 @@ export interface TmdbSeasonSummary {
   vote_average?: number;
 }
 
+export interface TmdbPersonRef {
+  id: number;
+  name: string;
+  profile_path: string | null;
+}
+
 export interface TmdbShowDetail extends TmdbShowSummary {
   status: string | null;
   number_of_seasons: number;
   number_of_episodes: number;
   seasons: TmdbSeasonSummary[];
+  created_by: TmdbPersonRef[];
 }
 
 export interface TmdbEpisode {
@@ -125,4 +132,92 @@ export function getShow(showId: number) {
 
 export function getSeason(showId: number, seasonNumber: number) {
   return tmdbFetch<TmdbSeasonDetail>(`/tv/${showId}/season/${seasonNumber}`);
+}
+
+// ---------- Credits & people ----------
+
+export interface TmdbAggregateCast extends TmdbPersonRef {
+  order: number;
+  total_episode_count: number;
+  roles: { credit_id: string; character: string; episode_count: number }[];
+}
+
+export interface TmdbAggregateCrew extends TmdbPersonRef {
+  department: string;
+  total_episode_count: number;
+  jobs: { credit_id: string; job: string; episode_count: number }[];
+}
+
+export interface TmdbAggregateCredits {
+  cast: TmdbAggregateCast[];
+  crew: TmdbAggregateCrew[];
+}
+
+export interface TmdbEpisodeCast extends TmdbPersonRef {
+  character: string;
+  order: number;
+}
+
+export interface TmdbEpisodeCrew extends TmdbPersonRef {
+  job: string;
+  department: string;
+}
+
+export interface TmdbEpisodeCredits {
+  cast: TmdbEpisodeCast[];
+  guest_stars: TmdbEpisodeCast[];
+  crew: TmdbEpisodeCrew[];
+}
+
+export interface TmdbPersonDetail extends TmdbPersonRef {
+  biography: string | null;
+  birthday: string | null;
+  deathday: string | null;
+  place_of_birth: string | null;
+  known_for_department: string | null;
+}
+
+interface TmdbPersonTvCreditBase {
+  id: number; // show id
+  name: string;
+  poster_path: string | null;
+  first_air_date: string | null;
+  vote_average: number;
+  genre_ids: number[];
+  episode_count: number;
+  credit_id: string;
+}
+
+export interface TmdbPersonTvCastCredit extends TmdbPersonTvCreditBase {
+  character: string;
+}
+
+export interface TmdbPersonTvCrewCredit extends TmdbPersonTvCreditBase {
+  job: string;
+  department: string;
+}
+
+export interface TmdbPersonTvCredits {
+  cast: TmdbPersonTvCastCredit[];
+  crew: TmdbPersonTvCrewCredit[];
+}
+
+export function getShowAggregateCredits(showId: number) {
+  return tmdbFetch<TmdbAggregateCredits>(`/tv/${showId}/aggregate_credits`);
+}
+
+export function getSeasonAggregateCredits(showId: number, seasonNumber: number) {
+  return tmdbFetch<TmdbAggregateCredits>(`/tv/${showId}/season/${seasonNumber}/aggregate_credits`);
+}
+
+export function getEpisodeCredits(showId: number, seasonNumber: number, episodeNumber: number) {
+  return tmdbFetch<TmdbEpisodeCredits>(`/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}/credits`);
+}
+
+export function getPerson(personId: number) {
+  return tmdbFetch<TmdbPersonDetail>(`/person/${personId}`);
+}
+
+export function getPersonTvCredits(personId: number) {
+  return tmdbFetch<TmdbPersonTvCredits>(`/person/${personId}/tv_credits`);
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteLogEntry } from "@/app/actions/watch";
 import { AddToListMenu } from "@/components/AddToListMenu";
+import { CreditsSection } from "@/components/CreditsSection";
 import { LogDialog } from "@/components/LogDialog";
 import { RatingControl } from "@/components/RatingControl";
 import { ReviewForm } from "@/components/ReviewForm";
@@ -13,6 +14,7 @@ import { WatchedToggle } from "@/components/WatchedToggle";
 import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureEpisode } from "@/lib/cache";
+import { ensureEpisodeCredits } from "@/lib/credits";
 import { formatDate, todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { tmdbPercent } from "@/lib/ratings";
@@ -41,7 +43,7 @@ export default async function EpisodePage(props: Props) {
   const { season } = ep;
   const show = season.show;
 
-  const [score, reviews, userRating, userReview, watchedMark, userLogs] = await Promise.all([
+  const [score, reviews, userRating, userReview, watchedMark, userLogs, credits] = await Promise.all([
     episodeScore(ep.id, ep.tmdbVoteAverage),
     visibleReviewsFor({ episodeId: ep.id }, viewer?.id ?? null),
     viewer ? prisma.rating.findUnique({ where: { userId_episodeId: { userId: viewer.id, episodeId: ep.id } } }) : null,
@@ -50,6 +52,7 @@ export default async function EpisodePage(props: Props) {
     viewer
       ? prisma.logEntry.findMany({ where: { userId: viewer.id, episodeId: ep.id }, orderBy: [{ watchedAt: "desc" }, { createdAt: "desc" }] })
       : [],
+    ensureEpisodeCredits(show.id, season.seasonNumber, ep.episodeNumber).catch(() => []),
   ]);
 
   const idx = season.episodes.findIndex((x) => x.id === ep.id);
@@ -150,6 +153,8 @@ export default async function EpisodePage(props: Props) {
           </ul>
         </section>
       )}
+
+      <CreditsSection credits={credits} castLimit={30} withGuests />
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Reviews</h2>
