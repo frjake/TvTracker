@@ -31,9 +31,9 @@ export function isNoiseGenre(genreIds: number[]): boolean {
 
 // ---------- query parsing ----------
 
-export const SHOW_SORTS = ["date", "rating", "tmdb", "myrating", "billing", "episodes", "name"] as const;
+export const SHOW_SORTS = ["date", "rating", "tmdb", "myrating", "billing", "episodes", "name", "role", "progress"] as const;
 export type ShowSort = (typeof SHOW_SORTS)[number];
-export const EPISODE_SORTS = ["date", "rating", "tmdb", "myrating", "billing", "show"] as const;
+export const EPISODE_SORTS = ["date", "rating", "tmdb", "myrating", "billing", "show", "role", "watched"] as const;
 export type EpisodeSort = (typeof EPISODE_SORTS)[number];
 export type Dir = "asc" | "desc";
 
@@ -45,6 +45,8 @@ export const SHOW_SORT_LABELS: Record<ShowSort, string> = {
   billing: "Billing order",
   episodes: "Episode count",
   name: "Name",
+  role: "Role",
+  progress: "Progress",
 };
 export const EPISODE_SORT_LABELS: Record<EpisodeSort, string> = {
   date: "Air date",
@@ -53,11 +55,13 @@ export const EPISODE_SORT_LABELS: Record<EpisodeSort, string> = {
   myrating: "Your rating",
   billing: "Billing order",
   show: "Show",
+  role: "Role",
+  watched: "Watched",
 };
 
 /** Sensible default direction per sort key (dates/ratings newest or best first). */
 export function defaultDirFor(sort: ShowSort | EpisodeSort): Dir {
-  return sort === "billing" || sort === "name" || sort === "show" ? "asc" : "desc";
+  return sort === "billing" || sort === "name" || sort === "show" || sort === "role" ? "asc" : "desc";
 }
 
 export interface FilmographyQuery {
@@ -128,8 +132,10 @@ export interface ShowRow {
   posterPath: string | null;
   firstAirDate: string | null;
   kind: "cast" | "crew";
-  /** Character for cast, job for crew. */
+  /** Character for cast, job for crew (all roles joined once grouped). */
   role: string;
+  /** Individual roles after grouping (one entry before). */
+  roles?: string[];
   department: string | null;
   episodeCount: number;
   genreIds: number[];
@@ -158,6 +164,7 @@ export interface EpisodeRow {
   airDate: string | null;
   kind: "cast" | "guest" | "crew";
   role: string;
+  roles?: string[];
   billing: number | null;
   tmdbVoteAverage: number | null;
   communityScore: number | null;
@@ -204,7 +211,7 @@ export function groupShowRows(rows: ShowRow[], q: FilmographyQuery): ShowRow[] {
     if (g.department == null) g.department = r.department;
   }
   return [...byShow.values()]
-    .map(({ roles, ...g }) => ({ ...g, role: roles.join(", ") }))
+    .map(({ roles, ...g }) => ({ ...g, role: roles.join(", "), roles }))
     .filter((g) => q.singles || g.episodeCount > 1);
 }
 
@@ -244,6 +251,38 @@ function compareBy<T>(
   };
 }
 
+/** 0..1 share of the show watched; unknown totals count as 0 once anything is watched; nothing watched with unknown total → null. */
+export function progressFraction(r: Pick<ShowRow, "watchedCount" | "totalEpisodes">): number | null {
+  if (r.totalEpisodes && r.totalEpisodes > 0) return Math.min(1, r.watchedCount / r.totalEpisodes);
+  return r.watchedCount > 0 ? 0 : null;
+}
+
+/**
+ * Clicking a column header: a new column sorts ascending; clicking the active column flips
+ * the direction (asc → desc → asc …). Returns the href for that next state.
+ */
+export function headerSortHref(
+  base: string,
+  q: FilmographyQuery,
+  section: "shows" | "episodes",
+  column: ShowSort | EpisodeSort,
+): string {
+  if (section === "shows") {
+    const col = column as ShowSort;
+    const dir: Dir = q.sort === col ? (q.dir === "asc" ? "desc" : "asc") : "asc";
+    return filmographyHref(base, q, { sort: col, dir });
+  }
+  const col = column as EpisodeSort;
+  const edir: Dir = q.esort === col ? (q.edir === "asc" ? "desc" : "asc") : "asc";
+  return filmographyHref(base, q, { esort: col, edir });
+}
+
+/** "asc" | "desc" when the column is the active sort, otherwise null. */
+export function activeSortDir(q: FilmographyQuery, section: "shows" | "episodes", column: string): Dir | null {
+  if (section === "shows") return q.sort === column ? q.dir : null;
+  return q.esort === column ? q.edir : null;
+}
+
 const byName = (a: ShowRow, b: ShowRow) => a.name.localeCompare(b.name) || a.role.localeCompare(b.role);
 
 export function sortShows(rows: ShowRow[], q: FilmographyQuery): ShowRow[] {
@@ -255,6 +294,8 @@ export function sortShows(rows: ShowRow[], q: FilmographyQuery): ShowRow[] {
     billing: (r) => r.billing,
     episodes: (r) => r.episodeCount,
     name: (r) => r.name.toLocaleLowerCase(),
+    role: (r) => (r.role ? r.role.toLocaleLowerCase() : null),
+    progress: (r) => progressFraction(r),
   };
   return [...rows].sort(compareBy(keys[q.sort], q.dir, byName));
 }
@@ -270,6 +311,8 @@ export function sortEpisodes(rows: EpisodeRow[], q: FilmographyQuery): EpisodeRo
     myrating: (r) => r.yourScore,
     billing: (r) => r.billing,
     show: (r) => r.showName.toLocaleLowerCase(),
+    role: (r) => (r.role ? r.role.toLocaleLowerCase() : null),
+    watched: (r) => (r.watched ? 1 : 0),
   };
   return [...rows].sort(compareBy(keys[q.esort], q.edir, byEpisodeOrder));
 }
@@ -291,12 +334,28 @@ export function groupEpisodeRows(rows: EpisodeRow[]): EpisodeRow[] {
     if (rank[r.kind] < rank[g.kind]) g.kind = r.kind;
     if (r.billing != null && (g.billing == null || r.billing < g.billing)) g.billing = r.billing;
   }
-  return [...byEpisode.values()].map(({ roles, ...g }) => ({ ...g, role: roles.join(", ") }));
+  return [...byEpisode.values()].map(({ roles, ...g }) => ({ ...g, role: roles.join(", "), roles }));
 }
 
 /** filter → group → sort, in one call. */
 export function prepareEpisodes(rows: EpisodeRow[], q: FilmographyQuery): EpisodeRow[] {
   return sortEpisodes(groupEpisodeRows(filterEpisodes(rows, q)), q);
+}
+
+/**
+ * New (from, to) pair after one end of a year range changes. An impossible range is fixed by
+ * moving the other end to the value that was just set (from 2015 → to 2014 becomes 2015–2015).
+ */
+export function coerceYearRange(
+  changed: "from" | "to",
+  value: number | null,
+  from: number | null,
+  to: number | null,
+): { from: number | null; to: number | null } {
+  if (changed === "from") {
+    return { from: value, to: value != null && to != null && to < value ? value : to };
+  }
+  return { to: value, from: value != null && from != null && from > value ? value : from };
 }
 
 /** Builds a query string from a query object plus overrides, dropping defaults. */

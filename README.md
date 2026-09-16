@@ -6,6 +6,7 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
 
 ## Features
 
+- **Search** – the search box finds shows and people; results are split into Shows / People tabs.
 - **Watch log** – one entry per episode watch, grouped by day. Several entries on the same day
   stay in the order you logged them. "Log whole season" adds every episode at once.
 - **Ratings & reviews** – rate any episode or season 0–100 %. Community scores are the average
@@ -17,8 +18,9 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
 - **Cast & crew** – every show, season and episode lists its cast (plus guest stars on
   episodes) and key crew (directing, writing, creators, executive producers). Click anyone to
   see their other shows, sortable by release date, community rating, your rating, billing
-  order, episode count or name, and filterable by watched state (not started / in progress /
-  completed), year range and cast vs. crew. Talk/news/reality shows and one-episode credits
+  order, episode count or name by clicking the column headers (ascending → descending), and
+  filterable by watched state (not started / in progress / completed), year range and cast vs.
+  crew. A show with more than three roles collapses them behind "+N more". Talk/news/reality shows and one-episode credits
   are hidden by default (toggleable). "Find their episodes" scans a show's episode credits so
   the person's individual episodes appear too.
 - **Follows & feed** – follow people to get their activity on your home page. Accounts can be

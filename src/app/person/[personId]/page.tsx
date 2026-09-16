@@ -3,8 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { scanSeason, scanShow } from "@/app/actions/credits";
+import { RolesCell } from "@/components/RolesCell";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { SortFilterBar } from "@/components/SortFilterBar";
+import { SortableTh } from "@/components/SortableTh";
 import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
 import { CREDIT_KIND, SCAN_MAX_EPISODES } from "@/lib/constants";
@@ -13,8 +15,10 @@ import { prisma } from "@/lib/db";
 import {
   type EpisodeRow,
   type ShowRow,
+  activeSortDir,
   filterShows,
   groupShowRows,
+  headerSortHref,
   parseFilmographyQuery,
   prepareEpisodes,
   prepareShows,
@@ -53,6 +57,8 @@ export default async function PersonPage(props: Props) {
   const [viewer, sp] = await Promise.all([getCurrentUser(), props.searchParams]);
   const q = parseFilmographyQuery(sp);
   const base = `/person/${person.id}`;
+  const th = (col: Parameters<typeof headerSortHref>[3]) => `${headerSortHref(base, q, "shows", col)}#shows`;
+  const eth = (col: Parameters<typeof headerSortHref>[3]) => `${headerSortHref(base, q, "episodes", col)}#episodes`;
 
   const filmography = await ensurePersonFilmography(person).catch(() => []);
   const showIds = [...new Set(filmography.map((f) => f.showId))];
@@ -179,11 +185,11 @@ export default async function PersonPage(props: Props) {
       </section>
 
       {/* ---------- shows ---------- */}
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3" id="shows">
         <h2 className="text-lg font-semibold">
           Shows <span className="text-sm font-normal text-muted">({shows.length}{hiddenCount > 0 ? ` shown · ${hiddenCount} hidden by default filters` : ""})</span>
         </h2>
-        <SortFilterBar q={q} section="shows" signedIn={!!viewer} />
+        <SortFilterBar q={q} section="shows" signedIn={!!viewer} base={base} />
         {shows.length === 0 ? (
           <p className="text-sm text-muted">No shows match these filters.</p>
         ) : (
@@ -191,14 +197,14 @@ export default async function PersonPage(props: Props) {
             <table className="w-full text-sm">
               <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-3 py-2">Show</th>
-                  <th className="px-3 py-2">Role</th>
-                  <th className="px-3 py-2">Eps</th>
-                  <th className="px-3 py-2">Year</th>
-                  <th className="px-3 py-2">Score</th>
-                  {viewer && <th className="px-3 py-2">Yours</th>}
-                  {viewer && <th className="px-3 py-2">Progress</th>}
-                  <th className="px-3 py-2">Billing</th>
+                  <SortableTh href={th("name")} dir={activeSortDir(q, "shows", "name")}>Show</SortableTh>
+                  <SortableTh href={th("role")} dir={activeSortDir(q, "shows", "role")}>Role</SortableTh>
+                  <SortableTh href={th("episodes")} dir={activeSortDir(q, "shows", "episodes")}>Eps</SortableTh>
+                  <SortableTh href={th("date")} dir={activeSortDir(q, "shows", "date")}>Year</SortableTh>
+                  <SortableTh href={th("rating")} dir={activeSortDir(q, "shows", "rating")}>Score</SortableTh>
+                  {viewer && <SortableTh href={th("myrating")} dir={activeSortDir(q, "shows", "myrating")}>Yours</SortableTh>}
+                  {viewer && <SortableTh href={th("progress")} dir={activeSortDir(q, "shows", "progress")}>Progress</SortableTh>}
+                  <SortableTh href={th("billing")} dir={activeSortDir(q, "shows", "billing")}>Billing</SortableTh>
                   {viewer && <th className="px-3 py-2">Episodes</th>}
                 </tr>
               </thead>
@@ -219,7 +225,10 @@ export default async function PersonPage(props: Props) {
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-muted">
-                        {r.role}{r.kind === "crew" && r.department ? <span className="text-xs"> · {r.department}</span> : null}
+                        <RolesCell
+                          roles={r.roles ?? (r.role ? [r.role] : [])}
+                          suffix={r.kind === "crew" && r.department ? <span className="text-xs"> · {r.department}</span> : null}
+                        />
                       </td>
                       <td className="px-3 py-2 tabular-nums">{r.episodeCount}</td>
                       <td className="px-3 py-2 tabular-nums text-muted">{yearOf(r.firstAirDate) ?? "—"}</td>
@@ -283,18 +292,18 @@ export default async function PersonPage(props: Props) {
           </p>
         ) : (
           <>
-            <SortFilterBar q={q} section="episodes" signedIn={!!viewer} showOptions={episodeShowOptions} />
+            <SortFilterBar q={q} section="episodes" signedIn={!!viewer} base={base} showOptions={episodeShowOptions} />
             <div className="overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
                   <tr>
-                    <th className="px-3 py-2">Episode</th>
-                    <th className="px-3 py-2">Role</th>
-                    <th className="px-3 py-2">Aired</th>
-                    <th className="px-3 py-2">Score</th>
-                    {viewer && <th className="px-3 py-2">Yours</th>}
-                    {viewer && <th className="px-3 py-2 text-center">Seen</th>}
-                    <th className="px-3 py-2">Billing</th>
+                    <SortableTh href={eth("show")} dir={activeSortDir(q, "episodes", "show")}>Episode</SortableTh>
+                    <SortableTh href={eth("role")} dir={activeSortDir(q, "episodes", "role")}>Role</SortableTh>
+                    <SortableTh href={eth("date")} dir={activeSortDir(q, "episodes", "date")}>Aired</SortableTh>
+                    <SortableTh href={eth("rating")} dir={activeSortDir(q, "episodes", "rating")}>Score</SortableTh>
+                    {viewer && <SortableTh href={eth("myrating")} dir={activeSortDir(q, "episodes", "myrating")}>Yours</SortableTh>}
+                    {viewer && <SortableTh href={eth("watched")} dir={activeSortDir(q, "episodes", "watched")} align="center">Seen</SortableTh>}
+                    <SortableTh href={eth("billing")} dir={activeSortDir(q, "episodes", "billing")}>Billing</SortableTh>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,7 +314,9 @@ export default async function PersonPage(props: Props) {
                           {r.showName} <span className="text-muted">S{r.seasonNumber}E{r.episodeNumber}</span> · {r.title}
                         </Link>
                       </td>
-                      <td className="px-3 py-2 text-muted">{r.role}{r.kind === "guest" ? <span className="text-xs"> · guest</span> : null}</td>
+                      <td className="px-3 py-2 text-muted">
+                        <RolesCell roles={r.roles ?? (r.role ? [r.role] : [])} suffix={r.kind === "guest" ? <span className="text-xs"> · guest</span> : null} />
+                      </td>
                       <td className="px-3 py-2 text-muted">{r.airDate ?? "—"}</td>
                       <td className="px-3 py-2"><ScoreBadge score={scoreFrom(r.communityScore, r.communityCount, r.tmdbVoteAverage)} size="sm" /></td>
                       {viewer && <td className="px-3 py-2"><Pct value={r.yourScore} /></td>}

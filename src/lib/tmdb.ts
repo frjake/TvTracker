@@ -221,3 +221,18 @@ export function getPerson(personId: number) {
 export function getPersonTvCredits(personId: number) {
   return tmdbFetch<TmdbPersonTvCredits>(`/person/${personId}/tv_credits`);
 }
+
+// ---------- people search ----------
+
+export interface TmdbPersonSummary extends TmdbPersonRef {
+  known_for_department: string | null;
+  known_for: { id: number; media_type: "tv" | "movie"; name?: string; title?: string; poster_path: string | null }[];
+}
+
+export function searchPeople(query: string, page = 1) {
+  return tmdbFetch<TmdbPage<TmdbPersonSummary>>("/search/person", {
+    query,
+    page: String(page),
+    include_adult: "false",
+  });
+}

@@ -21,8 +21,8 @@ export async function Nav() {
           <input
             type="search"
             name="q"
-            placeholder="Search TV shows…"
-            aria-label="Search TV shows"
+            placeholder="Search shows & people…"
+            aria-label="Search shows and people"
             className="input"
           />
         </form>

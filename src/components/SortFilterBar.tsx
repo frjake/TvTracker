@@ -1,138 +1,227 @@
-import {
-  EPISODE_SORTS,
-  EPISODE_SORT_LABELS,
-  type FilmographyQuery,
-  SHOW_SORTS,
-  SHOW_SORT_LABELS,
-  defaultDirFor,
-} from "@/lib/people";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
+import { type FilmographyQuery, coerceYearRange, filmographyHref } from "@/lib/people";
 
 /**
- * GET form for sorting/filtering a person's shows or episodes. Renders the controls for one
- * section and carries the other section's non-default params as hidden inputs so both
- * tables keep their state in one URL.
+ * Filters for a person's shows or episodes. Every control applies immediately by navigating
+ * to the matching URL (server-rendered results, scroll kept). Sorting lives in the table
+ * headers; the current sort and the other section's filters are preserved because the href
+ * is built from the whole query object.
  */
 export function SortFilterBar({
   q,
   section,
   signedIn,
+  base,
   showOptions = [],
 }: {
   q: FilmographyQuery;
   section: "shows" | "episodes";
   signedIn: boolean;
+  base: string;
   showOptions?: { id: number; name: string }[];
 }) {
-  const hidden: [string, string][] = [];
-  const keep = (key: string, value: string | number | boolean | null, def: string | number | boolean | null) => {
-    if (value !== def && value != null && value !== false) hidden.push([key, value === true ? "1" : String(value)]);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const apply = (overrides: Partial<FilmographyQuery>) => {
+    startTransition(() => {
+      router.replace(`${filmographyHref(base, q, overrides)}#${section}`, { scroll: false });
+    });
   };
 
-  if (section === "episodes") {
-    keep("sort", q.sort, "date");
-    keep("dir", q.dir, defaultDirFor(q.sort));
-    keep("watched", q.watched, "any");
-    keep("from", q.from, null);
-    keep("to", q.to, null);
-    keep("all", q.all, false);
-    keep("singles", q.singles, false);
-    keep("dept", q.dept, "all");
-  } else {
-    keep("esort", q.esort, "date");
-    keep("edir", q.edir, defaultDirFor(q.esort));
-    keep("ewatched", q.ewatched, "any");
-    keep("efrom", q.efrom, null);
-    keep("eto", q.eto, null);
-    keep("eshow", q.eshow, null);
-  }
+  const isShows = section === "shows";
+  const fromKey = isShows ? "from" : "efrom";
+  const toKey = isShows ? "to" : "eto";
+  const from = isShows ? q.from : q.efrom;
+  const to = isShows ? q.to : q.eto;
 
-  const p = section === "episodes" ? "e" : "";
-  const sorts = section === "episodes" ? EPISODE_SORTS : SHOW_SORTS;
-  const labels: Record<string, string> = section === "episodes" ? EPISODE_SORT_LABELS : SHOW_SORT_LABELS;
-  const sort = section === "episodes" ? q.esort : q.sort;
-  const dir = section === "episodes" ? q.edir : q.dir;
+  // Changing one end past the other moves the other end to the new value.
+  const applyYear = (changed: "from" | "to", value: number | null) => {
+    const range = coerceYearRange(changed, value, from, to);
+    apply({ [fromKey]: range.from, [toKey]: range.to });
+  };
 
   return (
-    <form method="get" className="card flex flex-wrap items-end gap-3 text-sm" id={`${section}-filters`}>
-      {hidden.map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted">Sort by</span>
-        <select name={`${p}sort`} defaultValue={sort} className="input w-44">
-          {sorts.map((s) => (
-            <option key={s} value={s} disabled={s === "myrating" && !signedIn}>
-              {labels[s]}{s === "myrating" && !signedIn ? " (log in)" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted">Order</span>
-        <select name={`${p}dir`} defaultValue={dir} className="input w-32">
-          <option value="desc">Descending</option>
-          <option value="asc">Ascending</option>
-        </select>
-      </label>
-
-      {section === "shows" ? (
+    <div
+      className={`card flex flex-wrap items-end gap-3 text-sm transition-opacity ${pending ? "opacity-60" : ""}`}
+      id={`${section}-filters`}
+      aria-busy={pending}
+    >
+      {isShows ? (
         <>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">Watched</span>
-            <select name="watched" defaultValue={q.watched} className="input w-36" disabled={!signedIn}>
-              <option value="any">Any</option>
-              <option value="not_started">Not started</option>
-              <option value="in_progress">In progress</option>
-              <option value="completed">Completed</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">Role</span>
-            <select name="dept" defaultValue={q.dept} className="input w-28">
-              <option value="all">All</option>
-              <option value="cast">Cast</option>
-              <option value="crew">Crew</option>
-            </select>
-          </label>
+          <Select
+            label="Watched"
+            value={q.watched}
+            defaultValue="any"
+            disabled={!signedIn}
+            onChange={(v) => apply({ watched: v as FilmographyQuery["watched"] })}
+            options={[
+              ["any", "Any"],
+              ["not_started", "Not started"],
+              ["in_progress", "In progress"],
+              ["completed", "Completed"],
+            ]}
+          />
+          <Select
+            label="Role"
+            value={q.dept}
+            defaultValue="all"
+            onChange={(v) => apply({ dept: v as FilmographyQuery["dept"] })}
+            options={[
+              ["all", "All"],
+              ["cast", "Cast"],
+              ["crew", "Crew"],
+            ]}
+          />
         </>
       ) : (
         <>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">Watched</span>
-            <select name="ewatched" defaultValue={q.ewatched} className="input w-32" disabled={!signedIn}>
-              <option value="any">Any</option>
-              <option value="watched">Watched</option>
-              <option value="unwatched">Unwatched</option>
-            </select>
-          </label>
+          <Select
+            label="Watched"
+            value={q.ewatched}
+            defaultValue="any"
+            disabled={!signedIn}
+            onChange={(v) => apply({ ewatched: v as FilmographyQuery["ewatched"] })}
+            options={[
+              ["any", "Any"],
+              ["watched", "Watched"],
+              ["unwatched", "Unwatched"],
+            ]}
+          />
           {showOptions.length > 1 && (
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-muted">Show</span>
-              <select name="eshow" defaultValue={q.eshow ?? ""} className="input w-44">
-                <option value="">All shows</option>
-                {showOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
+            <Select
+              label="Show"
+              value={q.eshow == null ? "" : String(q.eshow)}
+              defaultValue=""
+              onChange={(v) => apply({ eshow: v ? Number(v) : null })}
+              options={[["", "All shows"], ...showOptions.map((s) => [String(s.id), s.name] as [string, string])]}
+            />
           )}
         </>
       )}
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted">From year</span>
-        <input type="number" name={`${p}from`} defaultValue={(section === "episodes" ? q.efrom : q.from) ?? ""} min={1900} max={2100} placeholder="1990" className="input w-24" />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted">To year</span>
-        <input type="number" name={`${p}to`} defaultValue={(section === "episodes" ? q.eto : q.to) ?? ""} min={1900} max={2100} placeholder="2026" className="input w-24" />
-      </label>
+      <YearInput key={`from-${from}`} label="From year" value={from} placeholder="1990" onCommit={(v) => applyYear("from", v)} />
+      <YearInput key={`to-${to}`} label="To year" value={to} placeholder="2026" onCommit={(v) => applyYear("to", v)} />
 
-      {section === "shows" && (
+      {isShows && (
         <div className="flex flex-col gap-1 pb-1">
-          <label className="flex items-center gap-2"><input type="checkbox" name="all" value="1" defaultChecked={q.all} className="accent-accent" /> Include talk / news / reality</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="singles" value="1" defaultChecked={q.singles} className="accent-accent" /> Include 1-episode credits</label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={q.all} onChange={(e) => apply({ all: e.target.checked })} className="accent-accent" />
+            Include talk / news / reality
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={q.singles} onChange={(e) => apply({ singles: e.target.checked })} className="accent-accent" />
+            Include 1-episode credits
+          </label>
         </div>
       )}
+    </div>
+  );
+}
 
-      <button type="submit" className="btn-primary">Apply</button>
-    </form>
+/** Small × that resets a control to its default; dimmed and inert when already there. */
+function ClearButton({ label, active, disabled, onClear }: { label: string; active: boolean; disabled?: boolean; onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      disabled={!active || disabled}
+      aria-label={`Clear ${label} filter`}
+      title={active ? `Clear ${label}` : undefined}
+      className={`h-8 w-6 rounded text-base leading-none ${active ? "text-muted hover:bg-background hover:text-foreground" : "text-muted opacity-30"}`}
+    >
+      ×
+    </button>
+  );
+}
+
+/** Dropdown with a small × on its left that resets it to the default value. */
+function Select({
+  label,
+  value,
+  defaultValue,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  defaultValue: string;
+  options: [string, string][];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const active = value !== defaultValue;
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs text-muted">{label}</span>
+      <span className="flex items-center gap-1">
+        <ClearButton label={label} active={active} disabled={disabled} onClear={() => onChange(defaultValue)} />
+        <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="input w-36">
+          {options.map(([v, text]) => (
+            <option key={v} value={v}>{text}</option>
+          ))}
+        </select>
+      </span>
+    </label>
+  );
+}
+
+/** Year box with a clearing ×; applies after a short pause in typing, on blur, or on Enter. */
+function YearInput({
+  label,
+  value,
+  placeholder,
+  onCommit,
+}: {
+  label: string;
+  value: number | null;
+  placeholder: string;
+  onCommit: (value: number | null) => void;
+}) {
+  // The parent keys this component on `value`, so an external change (URL edit) remounts it.
+  const [text, setText] = useState(value == null ? "" : String(value));
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const commit = (raw: string) => {
+    const n = Number(raw);
+    const next = raw && Number.isInteger(n) && n >= 1900 && n <= 2100 ? n : null;
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs text-muted">{label}</span>
+      <span className="flex items-center gap-1">
+      <ClearButton label={label} active={value != null} onClear={() => { if (timer.current) clearTimeout(timer.current); onCommit(null); }} />
+      <input
+        type="number"
+        value={text}
+        min={1900}
+        max={2100}
+        placeholder={placeholder}
+        className="input w-24"
+        onChange={(e) => {
+          setText(e.target.value);
+          if (timer.current) clearTimeout(timer.current);
+          const raw = e.target.value;
+          timer.current = setTimeout(() => commit(raw), 500);
+        }}
+        onBlur={(e) => {
+          if (timer.current) clearTimeout(timer.current);
+          commit(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            if (timer.current) clearTimeout(timer.current);
+            commit((e.target as HTMLInputElement).value);
+          }
+        }}
+      />
+      </span>
+    </label>
   );
 }

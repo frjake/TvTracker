@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   type EpisodeRow,
   type ShowRow,
+  activeSortDir,
+  coerceYearRange,
   filmographyHref,
+  headerSortHref,
   filterEpisodes,
   filterShows,
   groupEpisodeRows,
@@ -10,6 +13,7 @@ import {
   isKeyCrew,
   prepareShows,
   parseFilmographyQuery,
+  progressFraction,
   progressState,
   sortEpisodes,
   sortShows,
@@ -232,5 +236,63 @@ describe("filmographyHref", () => {
     expect(filmographyHref("/person/1", defaults)).toBe("/person/1");
     expect(filmographyHref("/person/1", defaults, { sort: "rating", all: true })).toBe("/person/1?sort=rating&all=1");
     expect(filmographyHref("/person/1", defaults, { sort: "name", dir: "desc" })).toBe("/person/1?sort=name&dir=desc");
+  });
+});
+
+describe("header sorting", () => {
+  it("a new column sorts ascending first", () => {
+    expect(headerSortHref("/person/1", defaults, "shows", "name")).toBe("/person/1?sort=name");
+    expect(headerSortHref("/person/1", defaults, "shows", "rating")).toBe("/person/1?sort=rating&dir=asc");
+  });
+  it("clicking the active column cycles asc → desc → asc", () => {
+    const asc = parseFilmographyQuery({ sort: "name" });
+    expect(headerSortHref("/person/1", asc, "shows", "name")).toBe("/person/1?sort=name&dir=desc");
+    const desc = parseFilmographyQuery({ sort: "name", dir: "desc" });
+    expect(headerSortHref("/person/1", desc, "shows", "name")).toBe("/person/1?sort=name");
+  });
+  it("episode headers use the e-prefixed params and keep show params", () => {
+    const q = parseFilmographyQuery({ sort: "episodes" });
+    expect(headerSortHref("/person/1", q, "episodes", "watched")).toBe("/person/1?sort=episodes&esort=watched&edir=asc");
+  });
+  it("reports the active direction per column", () => {
+    const q = parseFilmographyQuery({ sort: "role", esort: "billing", edir: "desc" });
+    expect(activeSortDir(q, "shows", "role")).toBe("asc");
+    expect(activeSortDir(q, "shows", "name")).toBeNull();
+    expect(activeSortDir(q, "episodes", "billing")).toBe("desc");
+  });
+  it("sorts shows by role and progress, episodes by role and watched", () => {
+    const rows = [
+      show({ showId: 1, name: "A", role: "Zed", watchedCount: 5, totalEpisodes: 10 }),
+      show({ showId: 2, name: "B", role: "Alpha", watchedCount: 10, totalEpisodes: 10 }),
+      show({ showId: 3, name: "C", role: "Mid", watchedCount: 0, totalEpisodes: null }),
+    ];
+    expect(sortShows(rows, parseFilmographyQuery({ sort: "role" })).map((r) => r.name)).toEqual(["B", "C", "A"]);
+    expect(sortShows(rows, parseFilmographyQuery({ sort: "progress" })).map((r) => r.name)).toEqual(["B", "A", "C"]);
+    expect(progressFraction({ watchedCount: 3, totalEpisodes: null })).toBe(0);
+    const eps = [episode({ title: "x", watched: false, role: "b" }), episode({ title: "y", watched: true, role: "a", episodeNumber: 2 })];
+    expect(sortEpisodes(eps, parseFilmographyQuery({ esort: "watched" })).map((r) => r.title)).toEqual(["y", "x"]);
+    expect(sortEpisodes(eps, parseFilmographyQuery({ esort: "role" })).map((r) => r.title)).toEqual(["y", "x"]);
+  });
+  it("grouped rows expose their individual roles", () => {
+    const grouped = groupShowRows([show({ showId: 1, role: "A" }), show({ showId: 1, role: "B" })], defaults);
+    expect(grouped[0].roles).toEqual(["A", "B"]);
+  });
+});
+
+describe("coerceYearRange", () => {
+  it("leaves valid ranges alone", () => {
+    expect(coerceYearRange("from", 2010, 2000, 2020)).toEqual({ from: 2010, to: 2020 });
+    expect(coerceYearRange("to", 2015, 2010, 2020)).toEqual({ from: 2010, to: 2015 });
+  });
+  it("drags the other end to match when the range becomes impossible", () => {
+    expect(coerceYearRange("from", 2015, 2010, 2014)).toEqual({ from: 2015, to: 2015 });
+    expect(coerceYearRange("to", 2005, 2010, 2020)).toEqual({ from: 2005, to: 2005 });
+  });
+  it("clearing one end never touches the other", () => {
+    expect(coerceYearRange("from", null, 2010, 2005)).toEqual({ from: null, to: 2005 });
+    expect(coerceYearRange("to", null, 2010, 2005)).toEqual({ from: 2010, to: null });
+  });
+  it("an open other end stays open", () => {
+    expect(coerceYearRange("from", 2015, null, null)).toEqual({ from: 2015, to: null });
   });
 });

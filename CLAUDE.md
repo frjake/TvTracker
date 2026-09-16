@@ -42,14 +42,16 @@ src/lib/profile.ts    loadProfile(username): owner + viewer + followState + canV
 src/lib/reviews.ts    visibleReviewsFor(target, viewerId)
 src/lib/credits.ts    ensureShowCredits / ensureSeasonCredits / ensureEpisodeCredits (TMDB → Credit rows, replaced per scope),
                       ensurePerson, ensurePersonFilmography (PersonTvCredit), scanShow/SeasonEpisodeCredits (batched)
-src/lib/people.ts     PURE: isKeyCrew, progressState, parseFilmographyQuery, filterShows/sortShows, filterEpisodes/sortEpisodes, filmographyHref
+src/lib/people.ts     PURE: isKeyCrew, progressState, parseFilmographyQuery, prepareShows/prepareEpisodes (filter→group→sort),
+                      headerSortHref/activeSortDir (column-header sort cycle), filmographyHref
 src/app/actions/      'use server' files: auth, watch (watched/log/rate/review), lists, follows, settings, credits (scans)
 src/components/       Nav, ShowCard, ScoreBadge, WatchedToggle, RatingControl, LogDialog, ReviewForm,
                       ReviewList, AddToListMenu, DiaryList, ActivityItem, FollowButton, UserList, forms (TargetFields, SubmitButton),
-                      PersonChip, CreditsSection (groupByPerson, CastGrid, CrewList), CastTable, SortFilterBar
+                      PersonChip, CreditsSection (groupByPerson, CastGrid, CrewList), CastTable, SortFilterBar (filters only),
+                      SortableTh (header sort link + ▲/▼), RolesCell (>3 roles collapse)
 ```
 
-Routes: `/`, `/search`, `/show/[showId]`, `/show/[showId]/season/[n]`, `.../episode/[e]`, `/log`,
+Routes: `/`, `/search` (Shows/People tabs via `?tab=`), `/show/[showId]`, `/show/[showId]/season/[n]`, `.../episode/[e]`, `/log`,
 `/lists/new`, `/lists/[listId]`, `/u/[username]` (+ `/log /reviews /lists /followers /following`),
 `/requests`, `/settings`, `/login`, `/register`, `/person/[personId]`, `/show/[showId]/cast`, `.../season/[n]/cast`.
 
@@ -85,7 +87,9 @@ Routes: `/`, `/search`, `/show/[showId]`, `/show/[showId]/season/[n]`, `.../epis
     scanned per season. Person pages are public; "your" columns need a viewer.
 11. **Show score** = mean of all users' episode ratings (`showAveragesFor`, raw SQL), TMDB
     fallback. Person-page sorting/filtering is URL-param driven and the logic is in the pure
-    `people.ts` so it stays unit-tested; the page only assembles rows.
+    `people.ts` so it stays unit-tested; the page only assembles rows. Sorting is by clicking
+    column headers (`SortableTh`; new column → asc, same column → flip); the filter bar carries
+    the current sort as hidden inputs. Rows are grouped per show / per episode (roles merged).
 12. Server components can be async and query Prisma directly; client components (`'use client'`)
     call actions via `<form action>` / `useActionState`. `SubmitButton` gives pending state.
 
