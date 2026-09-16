@@ -14,10 +14,11 @@ import { ScoreBadge } from "@/components/ScoreBadge";
 import { WatchedToggle } from "@/components/WatchedToggle";
 import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
-import { ensureEpisode } from "@/lib/cache";
+import { ensureEpisode, ensureSeason } from "@/lib/cache";
 import { ensureEpisodeCredits } from "@/lib/credits";
 import { dateKey, formatDate, todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { adjacentSeasons } from "@/lib/navigation";
 import { tmdbPercent } from "@/lib/ratings";
 import { visibleReviewsFor } from "@/lib/reviews";
 import { episodeScore } from "@/lib/scores";
@@ -56,9 +57,20 @@ export default async function EpisodePage(props: Props) {
     ensureEpisodeCredits(show.id, season.seasonNumber, ep.episodeNumber).catch(() => []),
   ]);
 
+  // Previous/next episode, crossing into the neighbouring season at the ends. Specials stay
+  // outside the chain, so S1E1 has no previous episode even when a specials season exists.
   const idx = season.episodes.findIndex((x) => x.id === ep.id);
-  const prev = idx > 0 ? season.episodes[idx - 1] : null;
-  const next = idx >= 0 && idx < season.episodes.length - 1 ? season.episodes[idx + 1] : null;
+  let prev = idx > 0 ? season.episodes[idx - 1] : null;
+  let next = idx >= 0 && idx < season.episodes.length - 1 ? season.episodes[idx + 1] : null;
+  if (!prev || !next) {
+    const allSeasons = await prisma.season.findMany({ where: { showId: show.id }, select: { seasonNumber: true, episodeCount: true } });
+    const { prev: prevSeason, next: nextSeason } = adjacentSeasons(allSeasons, season.seasonNumber);
+    if (!prev && prevSeason) prev = (await ensureSeason(show.id, prevSeason.seasonNumber))?.episodes.at(-1) ?? null;
+    if (!next && nextSeason) next = (await ensureSeason(show.id, nextSeason.seasonNumber))?.episodes[0] ?? null;
+  }
+  const epHref = (e: { seasonNumber: number; episodeNumber: number }) => `/show/${show.id}/season/${e.seasonNumber}/episode/${e.episodeNumber}`;
+  const epLabel = (e: { seasonNumber: number; episodeNumber: number; name: string }) =>
+    `${e.seasonNumber === season.seasonNumber ? `E${e.episodeNumber}` : `S${e.seasonNumber}E${e.episodeNumber}`} ${e.name}`;
   const still = imageUrl(ep.stillPath, "w780");
   const base = `/show/${show.id}/season/${season.seasonNumber}`;
   const code = `S${ep.seasonNumber}E${ep.episodeNumber}`;
@@ -117,10 +129,10 @@ export default async function EpisodePage(props: Props) {
         </div>
       </section>
 
-      <div className="flex justify-between text-sm">
-        {prev ? <Link href={`${base}/episode/${prev.episodeNumber}`} className="navlink">← E{prev.episodeNumber} {prev.name}</Link> : <span />}
-        {next ? <Link href={`${base}/episode/${next.episodeNumber}`} className="navlink">E{next.episodeNumber} {next.name} →</Link> : <span />}
-      </div>
+      <nav className="flex justify-between gap-4 text-sm" aria-label="Episode navigation">
+        {prev ? <Link href={epHref(prev)} className="navlink">← {epLabel(prev)}</Link> : <span />}
+        {next ? <Link href={epHref(next)} className="navlink text-right">{epLabel(next)} →</Link> : <span />}
+      </nav>
 
       {viewer && (
         <section className="grid gap-4 lg:grid-cols-2">

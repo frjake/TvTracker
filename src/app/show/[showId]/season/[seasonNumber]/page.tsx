@@ -17,6 +17,7 @@ import { ensureSeason } from "@/lib/cache";
 import { ensureSeasonCredits } from "@/lib/credits";
 import { todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
+import { adjacentSeasons } from "@/lib/navigation";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
 import { visibleReviewsFor } from "@/lib/reviews";
 import { episodeAveragesForSeason, seasonScore } from "@/lib/scores";
@@ -43,7 +44,7 @@ export default async function SeasonPage(props: Props) {
   const viewer = await getCurrentUser();
   const episodeIds = season.episodes.map((e) => e.id);
 
-  const [score, episodeAverages, reviews, userRating, userReview, marks, logged, credits] = await Promise.all([
+  const [score, episodeAverages, reviews, userRating, userReview, marks, logged, credits, allSeasons] = await Promise.all([
     seasonScore(season.id, season.tmdbVoteAverage),
     episodeAveragesForSeason(season.id),
     visibleReviewsFor({ seasonId: season.id }, viewer?.id ?? null),
@@ -52,7 +53,9 @@ export default async function SeasonPage(props: Props) {
     viewer ? prisma.watchedMark.findMany({ where: { userId: viewer.id, episodeId: { in: episodeIds } }, select: { episodeId: true } }) : [],
     viewer ? prisma.logEntry.findMany({ where: { userId: viewer.id, episodeId: { in: episodeIds } }, select: { episodeId: true }, distinct: ["episodeId"] }) : [],
     ensureSeasonCredits(season.showId, season.seasonNumber).catch(() => []),
+    prisma.season.findMany({ where: { showId: season.showId }, select: { seasonNumber: true, name: true, episodeCount: true } }),
   ]);
+  const { prev: prevSeason, next: nextSeason } = adjacentSeasons(allSeasons, season.seasonNumber);
 
   const watched = new Set<number>([...marks.map((m) => m.episodeId), ...logged.map((l) => l.episodeId)]);
   const allWatched = episodeIds.length > 0 && episodeIds.every((id) => watched.has(id));
@@ -102,6 +105,13 @@ export default async function SeasonPage(props: Props) {
           )}
         </div>
       </section>
+
+      {(prevSeason || nextSeason) && (
+        <nav className="flex justify-between text-sm" aria-label="Season navigation">
+          {prevSeason ? <Link href={`/show/${season.showId}/season/${prevSeason.seasonNumber}`} className="navlink">← {prevSeason.name}</Link> : <span />}
+          {nextSeason ? <Link href={`/show/${season.showId}/season/${nextSeason.seasonNumber}`} className="navlink">{nextSeason.name} →</Link> : <span />}
+        </nav>
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Episodes</h2>
