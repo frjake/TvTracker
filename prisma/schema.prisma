@@ -1,0 +1,274 @@
+// TvTracker data model.
+// Conventions (see CLAUDE.md):
+//  - Show/Season/Episode rows are a cache of TMDB data keyed by TMDB ids.
+//  - Rating / Review / ListItem / Activity target exactly one of episodeId or seasonId
+//    (enforced in server actions; SQLite treats NULLs as distinct in unique indexes).
+//  - Follow.status and Activity.type are strings; allowed values live in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------- Accounts ----------
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  bio          String?
+  isPrivate    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  sessions     Session[]
+  logEntries   LogEntry[]
+  ratings      Rating[]
+  reviews      Review[]
+  watchedMarks WatchedMark[]
+  lists        List[]
+  following    Follow[]      @relation("FollowFollower")
+  followers    Follow[]      @relation("FollowFollowing")
+  activities   Activity[]
+}
+
+model Session {
+  id        String   @id // random token stored in the cookie
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------- TMDB cache ----------
+
+model Show {
+  id              Int      @id // TMDB tv id
+  name            String
+  overview        String?
+  posterPath      String?
+  backdropPath    String?
+  firstAirDate    String?
+  status          String?
+  numberOfSeasons Int?
+  tmdbVoteAverage Float?
+  fetchedAt       DateTime @default(now())
+
+  seasons  Season[]
+  episodes Episode[]
+}
+
+model Season {
+  id                Int       @id // TMDB season id
+  showId            Int
+  seasonNumber      Int
+  name              String
+  overview          String?
+  posterPath        String?
+  airDate           String?
+  episodeCount      Int?
+  tmdbVoteAverage   Float?
+  fetchedAt         DateTime  @default(now())
+  episodesFetchedAt DateTime? // null until ensureSeason() has loaded every episode
+
+  show       Show       @relation(fields: [showId], references: [id], onDelete: Cascade)
+  episodes   Episode[]
+  ratings    Rating[]
+  reviews    Review[]
+  listItems  ListItem[]
+  activities Activity[]
+
+  @@unique([showId, seasonNumber])
+}
+
+model Episode {
+  id              Int      @id // TMDB episode id
+  showId          Int
+  seasonId        Int
+  seasonNumber    Int
+  episodeNumber   Int
+  name            String
+  overview        String?
+  stillPath       String?
+  airDate         String?
+  runtime         Int?
+  tmdbVoteAverage Float?
+  fetchedAt       DateTime @default(now())
+
+  show         Show          @relation(fields: [showId], references: [id], onDelete: Cascade)
+  season       Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  logEntries   LogEntry[]
+  ratings      Rating[]
+  reviews      Review[]
+  watchedMarks WatchedMark[]
+  listItems    ListItem[]
+  activities   Activity[]
+
+  @@unique([showId, seasonNumber, episodeNumber])
+  @@index([seasonId])
+}
+
+// ---------- Watching ----------
+
+/// One diary row per episode watch. `watchedAt` carries date AND time; the time is only
+/// used to order entries within a day and is never shown to users.
+model LogEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  episodeId  Int
+  watchedAt  DateTime
+  rating     Int? // 0-100 snapshot at log time
+  reviewText String?
+  createdAt  DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode    Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@index([userId, watchedAt])
+  @@index([episodeId])
+}
+
+/// A user's standing rating (0-100) for an episode or a season. Averages use these.
+model Rating {
+  id        String   @id @default(cuid())
+  userId    String
+  episodeId Int?
+  seasonId  Int?
+  value     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode    Episode?   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  season     Season?    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([userId, episodeId])
+  @@unique([userId, seasonId])
+  @@index([episodeId])
+  @@index([seasonId])
+}
+
+/// A user's standing review for an episode or a season.
+model Review {
+  id               String   @id @default(cuid())
+  userId           String
+  episodeId        Int?
+  seasonId         Int?
+  body             String
+  containsSpoilers Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode    Episode?   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  season     Season?    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([userId, episodeId])
+  @@unique([userId, seasonId])
+  @@index([episodeId])
+  @@index([seasonId])
+}
+
+/// "Already seen" marker without a diary entry. An episode counts as watched if it has a
+/// WatchedMark OR any LogEntry.
+model WatchedMark {
+  id        String   @id @default(cuid())
+  userId    String
+  episodeId Int
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([episodeId])
+}
+
+// ---------- Lists ----------
+
+model List {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      ListItem[]
+  activities Activity[]
+
+  @@index([userId])
+}
+
+model ListItem {
+  id        String   @id @default(cuid())
+  listId    String
+  episodeId Int?
+  seasonId  Int?
+  position  Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  list    List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  season  Season?  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, episodeId])
+  @@unique([listId, seasonId])
+  @@index([listId, position])
+}
+
+// ---------- Social ----------
+
+/// status: "PENDING" (awaiting approval by a private account) | "ACCEPTED"
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  status      String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId, status])
+}
+
+/// Denormalized feed row written by every mutating action.
+/// type: "LOG" | "RATING" | "REVIEW" | "LIST_CREATED"
+model Activity {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String
+  episodeId  Int?
+  seasonId   Int?
+  listId     String?
+  logEntryId String?
+  ratingId   String?
+  reviewId   String?
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode  Episode?  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  season   Season?   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  list     List?     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  logEntry LogEntry? @relation(fields: [logEntryId], references: [id], onDelete: Cascade)
+  rating   Rating?   @relation(fields: [ratingId], references: [id], onDelete: Cascade)
+  review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}

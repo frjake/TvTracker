@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --foreground: #16181d;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1115;
+    --surface: #171a21;
+    --foreground: #e7e9ee;
+    --muted: #9aa3b2;
+    --line: #262b36;
+    --accent: #2dd4bf;
+    --accent-soft: #134e4a;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Small set of shared primitives used across pages. */
+@utility navlink {
+  @apply text-muted hover:text-foreground transition-colors;
+}
+@utility input {
+  @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent;
+}
+@utility btn-primary {
+  @apply inline-flex items-center justify-center rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50;
+}
+@utility btn-secondary {
+  @apply inline-flex items-center justify-center rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium text-foreground hover:bg-background disabled:opacity-50;
+}
+@utility card {
+  @apply rounded-lg border border-line bg-surface p-4;
+}
+@utility label {
+  @apply block text-sm font-medium text-foreground;
+}
