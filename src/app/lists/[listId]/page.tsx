@@ -3,10 +3,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { moveListItem, removeFromList } from "@/app/actions/lists";
+import { ProgressLabel } from "@/components/ProgressLabel";
 import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canEdit } from "@/lib/policies";
+import { sumProgress } from "@/lib/progress";
+import { seasonWatchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
 import { viewerCanSee } from "@/lib/social";
 import { imageUrl } from "@/lib/tmdb";
 import { EditListForm } from "./EditListForm";
@@ -39,6 +42,22 @@ export default async function ListPage(props: Props) {
   if (!(await viewerCanSee(viewer, list.user))) notFound();
   const owner = canEdit(viewer, list.userId);
 
+  // Viewer's own progress through the list: episodes count 1, seasons count their episodes.
+  const episodeIds = list.items.flatMap((i) => (i.episodeId != null ? [i.episodeId] : []));
+  const seasonIds = list.items.flatMap((i) => (i.seasonId != null ? [i.seasonId] : []));
+  const [seenEpisodes, seasonCounts] = viewer
+    ? await Promise.all([watchedEpisodeIds(viewer.id, episodeIds), seasonWatchedCountsFor(viewer.id, seasonIds)])
+    : [new Set<number>(), new Map<number, { watched: number; total: number }>()];
+  const progressOf = (item: (typeof list.items)[number]) => {
+    if (item.episodeId != null) return { watched: seenEpisodes.has(item.episodeId) ? 1 : 0, total: 1 };
+    if (item.seasonId != null) {
+      const c = seasonCounts.get(item.seasonId);
+      return c && c.total > 0 ? c : { watched: 0, total: item.season?.episodeCount ?? 0 };
+    }
+    return null;
+  };
+  const overall = sumProgress(list.items.map(progressOf));
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
@@ -51,6 +70,7 @@ export default async function ListPage(props: Props) {
         <h1 className="text-3xl font-semibold tracking-tight">{list.name}</h1>
         {list.description && <p className="max-w-2xl text-sm leading-relaxed">{list.description}</p>}
         <p className="text-sm text-muted">{list.items.length} item{list.items.length === 1 ? "" : "s"}</p>
+        {viewer && list.items.length > 0 && <ProgressLabel watched={overall.watched} total={overall.total} />}
         {owner && <EditListForm list={{ id: list.id, name: list.name, description: list.description }} />}
       </header>
 
@@ -80,6 +100,10 @@ export default async function ListPage(props: Props) {
                   <Link href={href} className="font-medium hover:underline">{show.name}</Link>
                   <p className="text-muted">{label}</p>
                 </div>
+                {viewer && (() => {
+                  const pr = progressOf(item);
+                  return pr ? <ProgressLabel watched={pr.watched} total={pr.total} compact /> : null;
+                })()}
                 {owner && (
                   <div className="flex items-center gap-1">
                     <form action={moveListItem}>

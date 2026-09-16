@@ -6,6 +6,7 @@ import { markSeasonWatched, unmarkSeasonWatched } from "@/app/actions/watch";
 import { AddToListMenu } from "@/components/AddToListMenu";
 import { CreditsSection } from "@/components/CreditsSection";
 import { LogDialog } from "@/components/LogDialog";
+import { ProgressLabel } from "@/components/ProgressLabel";
 import { RatingControl } from "@/components/RatingControl";
 import { ReviewForm } from "@/components/ReviewForm";
 import { ReviewList } from "@/components/ReviewList";
@@ -78,9 +79,9 @@ export default async function SeasonPage(props: Props) {
           <h1 className="text-3xl font-semibold tracking-tight">{season.name}</h1>
           <p className="text-sm text-muted">
             {season.episodes.length} episodes{season.airDate && ` · ${season.airDate.slice(0, 4)}`}
-            {viewer && ` · ${watched.size}/${season.episodes.length} watched`}
           </p>
           <ScoreBadge score={score} tmdbPercent={tmdbPercent(season.tmdbVoteAverage)} size="lg" />
+          {viewer && <ProgressLabel watched={watched.size} total={season.episodes.length} />}
           {season.overview && <p className="max-w-2xl text-sm leading-relaxed">{season.overview}</p>}
 
           {viewer ? (

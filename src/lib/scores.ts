@@ -109,3 +109,34 @@ export async function showScore(showId: number, tmdbVoteAverage: number | null |
   const agg = (await showAveragesFor([showId])).get(showId);
   return scoreFrom(agg?.average, agg?.count ?? 0, tmdbVoteAverage);
 }
+
+/**
+ * Per-season watched/total for the user. `total` counts cached Episode rows; callers fall
+ * back to Season.episodeCount when a season's episodes haven't been fetched yet.
+ */
+export async function seasonWatchedCountsFor(
+  userId: string,
+  seasonIds: number[],
+): Promise<Map<number, { watched: number; total: number }>> {
+  if (seasonIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<{ seasonId: number; watched: number | bigint; total: number | bigint }[]>`
+    SELECT e.seasonId AS seasonId,
+           COUNT(*) AS total,
+           SUM(CASE WHEN e.id IN (SELECT episodeId FROM WatchedMark WHERE userId = ${userId})
+                      OR e.id IN (SELECT episodeId FROM LogEntry WHERE userId = ${userId})
+                    THEN 1 ELSE 0 END) AS watched
+    FROM Episode e
+    WHERE e.seasonId IN (${Prisma.join(seasonIds)})
+    GROUP BY e.seasonId`;
+  return new Map(rows.map((r) => [Number(r.seasonId), { watched: Number(r.watched), total: Number(r.total) }]));
+}
+
+/** Episode ids (from the given set) the user has marked or logged. */
+export async function watchedEpisodeIds(userId: string, episodeIds: number[]): Promise<Set<number>> {
+  if (episodeIds.length === 0) return new Set();
+  const [marks, logs] = await Promise.all([
+    prisma.watchedMark.findMany({ where: { userId, episodeId: { in: episodeIds } }, select: { episodeId: true } }),
+    prisma.logEntry.findMany({ where: { userId, episodeId: { in: episodeIds } }, select: { episodeId: true }, distinct: ["episodeId"] }),
+  ]);
+  return new Set([...marks.map((m) => m.episodeId), ...logs.map((l) => l.episodeId)]);
+}
