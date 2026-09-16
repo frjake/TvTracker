@@ -30,6 +30,12 @@ export async function AddToListMenu({
     },
   });
 
+  // "+ New list" carries the item and where to come back to, so the new list starts with it.
+  const returnTo = `/show/${showId}/season/${seasonNumber}${episodeNumber != null ? `/episode/${episodeNumber}` : ""}`;
+  const params = new URLSearchParams({ showId: String(showId), seasonNumber: String(seasonNumber), returnTo });
+  if (episodeNumber != null) params.set("episodeNumber", String(episodeNumber));
+  const newListHref = `/lists/new?${params}`;
+
   return (
     <details className="relative">
       <summary className="btn-secondary cursor-pointer list-none">Add to list ▾</summary>
@@ -52,7 +58,7 @@ export async function AddToListMenu({
             </form>
           );
         })}
-        <Link href="/lists/new" className="mt-1 border-t border-line px-2 pt-2 text-sm text-accent hover:underline">
+        <Link href={newListHref} className="mt-1 border-t border-line px-2 pt-2 text-sm text-accent hover:underline">
           + New list
         </Link>
       </div>

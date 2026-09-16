@@ -26,17 +26,34 @@ async function ownedList(listId: string, userId: string) {
   return list;
 }
 
+/** Only same-origin relative paths may be used as a post-create destination. */
+function safeReturnTo(value: unknown): string | null {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+/**
+ * Creates a list. When the form came from an "Add to list → New list" flow it also carries
+ * the item (showId/seasonNumber[/episodeNumber]) and a returnTo path: the item becomes the
+ * list's first entry and the user lands back on the page they came from.
+ */
 export async function createList(_prev: ListFormState, formData: FormData): Promise<ListFormState> {
   const user = await requireUser("/lists/new");
   const parsed = listSchema.safeParse({ name: formData.get("name"), description: formData.get("description") ?? undefined });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
+  const target = formData.get("showId") ? await resolveTarget(formData) : null;
+
   const list = await prisma.list.create({
     data: { userId: user.id, name: parsed.data.name, description: parsed.data.description || null },
   });
+  if (target) {
+    await prisma.listItem.create({
+      data: { listId: list.id, episodeId: target.episodeId, seasonId: target.seasonId, position: 1 },
+    });
+  }
   await recordActivity({ userId: user.id, type: ACTIVITY_TYPE.LIST_CREATED, listId: list.id });
   refresh();
-  redirect(`/lists/${list.id}`);
+  redirect((target && safeReturnTo(formData.get("returnTo"))) || `/lists/${list.id}`);
 }
 
 export async function updateList(_prev: ListFormState, formData: FormData): Promise<ListFormState> {
