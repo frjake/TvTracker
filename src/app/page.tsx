@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ActivityItem } from "@/components/ActivityItem";
+import { Recommendations, RecommendationsSkeleton } from "@/components/Recommendations";
 import { ShowCard, ShowGrid } from "@/components/ShowCard";
 import { UserList } from "@/components/UserList";
 import { feedFor } from "@/lib/activity";
@@ -75,6 +77,12 @@ export default async function HomePage() {
             <Link href="/login" className="btn-secondary">Log in</Link>
           </div>
         </section>
+      )}
+
+      {user && (
+        <Suspense fallback={<RecommendationsSkeleton />}>
+          <Recommendations userId={user.id} />
+        </Suspense>
       )}
 
       <section>

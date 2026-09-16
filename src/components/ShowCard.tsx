@@ -7,9 +7,11 @@ interface Props {
   name: string;
   posterPath: string | null;
   firstAirDate?: string | null;
+  /** Small line under the title, e.g. "Because you watched Ted Lasso". */
+  caption?: string | null;
 }
 
-export function ShowCard({ id, name, posterPath, firstAirDate }: Props) {
+export function ShowCard({ id, name, posterPath, firstAirDate, caption }: Props) {
   const poster = imageUrl(posterPath, "w342");
   const year = firstAirDate?.slice(0, 4);
   return (
@@ -29,6 +31,7 @@ export function ShowCard({ id, name, posterPath, firstAirDate }: Props) {
       </div>
       <p className="mt-1.5 truncate text-sm font-medium group-hover:underline">{name}</p>
       {year && <p className="text-xs text-muted">{year}</p>}
+      {caption && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{caption}</p>}
     </Link>
   );
 }

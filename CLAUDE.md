@@ -22,7 +22,7 @@ accounts. TV metadata from TMDB, cached in SQLite. See `README.md` for setup and
 
 - `npm run dev` – dev server. `npm run check` = lint + typecheck + Vitest. `npm run build` for prod.
 - Schema change → edit `prisma/schema.prisma` → `npm run db:migrate -- --name <what>`.
-- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`, `people`); anything importing `server-only` can't be unit-tested there.
+- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`, `people`, `recommend`); anything importing `server-only` can't be unit-tested there.
 
 ## Repo map
 
@@ -42,13 +42,15 @@ src/lib/profile.ts    loadProfile(username): owner + viewer + followState + canV
 src/lib/reviews.ts    visibleReviewsFor(target, viewerId)
 src/lib/credits.ts    ensureShowCredits / ensureSeasonCredits / ensureEpisodeCredits (TMDB → Credit rows, replaced per scope),
                       ensurePerson, ensurePersonFilmography (PersonTvCredit), scanShow/SeasonEpisodeCredits (batched)
+src/lib/recommend.ts  PURE: recencyWeight, ratingFactor, buildSeeds, mergeCandidates + tuning constants (HALF_LIFE_DAYS…)
+src/lib/recommendations.ts recommendationsFor(userId): watches+marks → seeds → TMDB /recommendations → merge, excludes watched + listed
 src/lib/people.ts     PURE: isKeyCrew, progressState, parseFilmographyQuery, prepareShows/prepareEpisodes (filter→group→sort),
                       headerSortHref/activeSortDir (column-header sort cycle), filmographyHref
 src/app/actions/      'use server' files: auth, watch (watched/log/rate/review), lists, follows, settings, credits (scans)
 src/components/       Nav, ShowCard, ScoreBadge, WatchedToggle, RatingControl, LogDialog, ReviewForm,
                       ReviewList, AddToListMenu, DiaryList, ActivityItem, FollowButton, UserList, forms (TargetFields, SubmitButton),
                       PersonChip, CreditsSection (groupByPerson, CastGrid, CrewList), CastTable, SortFilterBar (filters only),
-                      SortableTh (header sort link + ▲/▼), RolesCell (>3 roles collapse)
+                      SortableTh (header sort link + ▲/▼), RolesCell (>3 roles collapse), Recommendations (+Skeleton)
 ```
 
 Routes: `/`, `/search` (Shows/People tabs via `?tab=`), `/show/[showId]`, `/show/[showId]/season/[n]`, `.../episode/[e]`, `/log`,
@@ -90,7 +92,10 @@ Routes: `/`, `/search` (Shows/People tabs via `?tab=`), `/show/[showId]`, `/show
     `people.ts` so it stays unit-tested; the page only assembles rows. Sorting is by clicking
     column headers (`SortableTh`; new column → asc, same column → flip); the filter bar carries
     the current sort as hidden inputs. Rows are grouped per show / per episode (roles merged).
-12. Server components can be async and query Prisma directly; client components (`'use client'`)
+12. **Recommendations** are computed per request (no table): seeds = recency-decayed watch
+    events × exponential rating factor; TMDB lists cached 24 h via fetch. Tune in
+    `recommend.ts` constants only. Section hides itself on error or with no watches.
+13. Server components can be async and query Prisma directly; client components (`'use client'`)
     call actions via `<form action>` / `useActionState`. `SubmitButton` gives pending state.
 
 ## Gotchas

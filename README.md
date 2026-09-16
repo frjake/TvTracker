@@ -23,6 +23,11 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
   crew. A show with more than three roles collapses them behind "+N more". Talk/news/reality shows and one-episode credits
   are hidden by default (toggleable). "Find their episodes" scans a show's episode credits so
   the person's individual episodes appear too.
+- **Recommended for you** – the signed-in home page suggests shows based on what you've
+  watched recently: each watched show is weighted by recency (30-day half-life) and by your
+  rating (doubling every 50 points), TMDB's recommendations for the top six are merged, and
+  anything you've watched or put on a list is excluded. Each poster says which show it's
+  "because" of.
 - **Follows & feed** – follow people to get their activity on your home page. Accounts can be
   made private: follow requests then need approval, and only accepted followers can see the
   profile, log, reviews and lists. Ratings from private accounts still count in averages.

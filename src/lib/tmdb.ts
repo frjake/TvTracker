@@ -236,3 +236,10 @@ export function searchPeople(query: string, page = 1) {
     include_adult: "false",
   });
 }
+
+// ---------- recommendations ----------
+
+/** TMDB's behaviour-based "people who liked X also liked" list; cached a day, shared by all users. */
+export function getShowRecommendations(showId: number) {
+  return tmdbFetch<TmdbPage<TmdbShowSummary>>(`/tv/${showId}/recommendations`, {}, 86_400);
+}
