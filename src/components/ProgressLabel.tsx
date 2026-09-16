@@ -1,8 +1,8 @@
 import { percentWatched } from "@/lib/progress";
 
 /**
- * "70% watched · 7/10" with a slim bar. Renders a muted "Not started" at 0 and nothing when
- * the total is unknown. `compact` drops the bar (for table cells and cards).
+ * "70% watched · 7/10" with a slim bar. Renders a muted "Not started" when nothing has been
+ * watched and nothing when the total is unknown. `compact` drops the bar (for table cells and cards).
  */
 export function ProgressLabel({
   watched,
@@ -16,7 +16,7 @@ export function ProgressLabel({
   const pct = percentWatched(watched, total);
   if (pct == null) return null;
   const done = pct >= 100;
-  const text = pct === 0 ? "Not started" : `${pct}% watched`;
+  const text = watched <= 0 ? "Not started" : `${pct}% watched`;
   const detail = `${Math.min(watched, total!)}/${total}`;
 
   if (compact) {

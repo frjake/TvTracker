@@ -5,10 +5,13 @@ export interface Progress {
   total: number;
 }
 
-/** 0–100 (rounded, clamped) share watched; null when the total is unknown or zero. */
+/**
+ * 0–100 share watched, rounded DOWN so 100% only appears when every episode is watched
+ * (399/400 → 99). Null when the total is unknown or zero.
+ */
 export function percentWatched(watched: number, total: number | null | undefined): number | null {
   if (total == null || total <= 0) return null;
-  return Math.min(100, Math.round((Math.min(watched, total) / total) * 100));
+  return Math.min(100, Math.floor((Math.min(watched, total) / total) * 100));
 }
 
 /** Adds up several parts (e.g. every item on a list). Parts with unknown totals are skipped. */
