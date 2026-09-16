@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { ensureEpisode, ensureSeason } from "./cache";
+import { ensureEpisode, ensureSeason, ensureShow } from "./cache";
 
 // Form fields that identify an episode (or, without episodeNumber, a season).
 // Shared by every server action that attaches user data to TMDB items.
@@ -31,4 +31,15 @@ export async function resolveTarget(formData: FormData) {
   const season = await ensureSeason(t.showId, t.seasonNumber);
   if (!season) throw new Error("Season not found");
   return { episodeId: null as number | null, seasonId: season.id, episode: null, season };
+}
+
+/**
+ * A show's seasons for whole-show operations, in season order. Specials (season 0) are
+ * dropped unless `includeSpecials`. Only seasons TMDB reports episodes for are returned.
+ */
+export async function resolveShowSeasons(showId: number, includeSpecials: boolean) {
+  const show = await ensureShow(showId);
+  if (!show) throw new Error("Show not found");
+  const seasons = show.seasons.filter((s) => (includeSpecials || s.seasonNumber !== 0) && (s.episodeCount ?? 0) > 0);
+  return { show, seasons };
 }

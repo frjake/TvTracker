@@ -6,8 +6,9 @@ import { recordActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { ACTIVITY_TYPE, RATING_MAX, RATING_MIN } from "@/lib/constants";
 import { combineDateWithNow, dateKey, isDateString } from "@/lib/dates";
+import { ensureSeason } from "@/lib/cache";
 import { prisma } from "@/lib/db";
-import { resolveTarget } from "@/lib/targets";
+import { resolveShowSeasons, resolveTarget } from "@/lib/targets";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -62,6 +63,37 @@ export async function unmarkSeasonWatched(formData: FormData) {
   const user = await requireUser();
   const { season } = await resolveTarget(formData);
   await prisma.watchedMark.deleteMany({ where: { userId: user.id, episode: { seasonId: season.id } } });
+  refresh();
+}
+
+/** Marks every episode of every season watched (specials optional). Fetches seasons as needed. */
+export async function markShowWatched(formData: FormData) {
+  const user = await requireUser();
+  const showId = z.coerce.number().int().positive().parse(formData.get("showId"));
+  const includeSpecials = formData.get("includeSpecials") === "on";
+  const { seasons } = await resolveShowSeasons(showId, includeSpecials);
+
+  for (const s of seasons) {
+    const season = await ensureSeason(showId, s.seasonNumber);
+    if (!season) continue;
+    await prisma.$transaction(
+      season.episodes.map((ep) =>
+        prisma.watchedMark.upsert({
+          where: { userId_episodeId: { userId: user.id, episodeId: ep.id } },
+          create: { userId: user.id, episodeId: ep.id },
+          update: {},
+        }),
+      ),
+    );
+  }
+  refresh();
+}
+
+/** Removes the user's watched marks for the whole show (specials included). Log entries stay. */
+export async function unmarkShowWatched(formData: FormData) {
+  const user = await requireUser();
+  const showId = z.coerce.number().int().positive().parse(formData.get("showId"));
+  await prisma.watchedMark.deleteMany({ where: { userId: user.id, episode: { showId } } });
   refresh();
 }
 

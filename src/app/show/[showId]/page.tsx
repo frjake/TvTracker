@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AddShowToListMenu } from "@/components/AddShowToListMenu";
 import { CreditsSection } from "@/components/CreditsSection";
+import { MarkShowWatched } from "@/components/MarkShowWatched";
 import { ProgressLabel } from "@/components/ProgressLabel";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureShow } from "@/lib/cache";
 import { ensureShowCredits } from "@/lib/credits";
+import { prisma } from "@/lib/db";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
 import { seasonAveragesForShow, seasonWatchedCountsFor, showScore, watchedCountsFor } from "@/lib/scores";
 import { imageUrl } from "@/lib/tmdb";
@@ -41,11 +44,29 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
   const backdrop = imageUrl(show.backdropPath, "w1280");
   const year = show.firstAirDate?.slice(0, 4);
 
+  // Whole-show controls (signed in): lists with how many of this show's seasons they hold, and
+  // whether every regular episode is already watched.
+  const regularSeasons = show.seasons.filter((s) => s.seasonNumber !== 0 && (s.episodeCount ?? 0) > 0);
+  const hasSpecials = show.seasons.some((s) => s.seasonNumber === 0 && (s.episodeCount ?? 0) > 0);
+  const lists = viewer
+    ? (
+        await prisma.list.findMany({
+          where: { userId: viewer.id },
+          orderBy: { updatedAt: "desc" },
+          include: { items: { where: { season: { showId: show.id } }, select: { id: true } } },
+        })
+      ).map((l) => ({ id: l.id, name: l.name, present: l.items.length }))
+    : [];
+  const watchedCount = showWatched.get(show.id) ?? 0;
+  const allWatched = show.numberOfEpisodes != null && show.numberOfEpisodes > 0 && watchedCount >= show.numberOfEpisodes;
+
   return (
     <div className="flex flex-col gap-8">
-      <section className="relative overflow-hidden rounded-lg border border-line">
+      <section className="relative rounded-lg border border-line">
         {backdrop && (
-          <Image src={backdrop} alt="" fill priority className="object-cover opacity-25" sizes="(max-width: 1152px) 100vw, 1152px" />
+          <div className="absolute inset-0 overflow-hidden rounded-lg" aria-hidden>
+            <Image src={backdrop} alt="" fill priority className="object-cover opacity-25" sizes="(max-width: 1152px) 100vw, 1152px" />
+          </div>
         )}
         <div className="relative flex flex-col gap-5 p-5 sm:flex-row">
           <div className="w-32 shrink-0 sm:w-44">
@@ -64,7 +85,13 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
               {show.numberOfSeasons != null && <span>{show.numberOfSeasons} season{show.numberOfSeasons === 1 ? "" : "s"}</span>}
             </div>
             <ScoreBadge score={score} tmdbPercent={tmdbPercent(show.tmdbVoteAverage)} size="lg" />
-            {viewer && <ProgressLabel watched={showWatched.get(show.id) ?? 0} total={show.numberOfEpisodes} />}
+            {viewer && <ProgressLabel watched={watchedCount} total={show.numberOfEpisodes} />}
+            {viewer && (
+              <div className="mt-1 flex flex-wrap items-start gap-2">
+                <MarkShowWatched showId={show.id} allWatched={allWatched} hasSpecials={hasSpecials} />
+                <AddShowToListMenu showId={show.id} lists={lists} seasonCount={regularSeasons.length} hasSpecials={hasSpecials} />
+              </div>
+            )}
             {show.overview && <p className="max-w-2xl text-sm leading-relaxed">{show.overview}</p>}
           </div>
         </div>

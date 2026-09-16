@@ -7,7 +7,7 @@ import { recordActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { ACTIVITY_TYPE } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { resolveTarget } from "@/lib/targets";
+import { resolveShowSeasons, resolveTarget } from "@/lib/targets";
 
 export type ListFormState = { error?: string; ok?: boolean } | undefined;
 
@@ -41,7 +41,9 @@ export async function createList(_prev: ListFormState, formData: FormData): Prom
   const parsed = listSchema.safeParse({ name: formData.get("name"), description: formData.get("description") ?? undefined });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
-  const target = formData.get("showId") ? await resolveTarget(formData) : null;
+  const wholeShow = formData.get("wholeShow") === "1";
+  const showId = formData.get("showId") ? z.coerce.number().int().positive().parse(formData.get("showId")) : null;
+  const target = showId && !wholeShow ? await resolveTarget(formData) : null;
 
   const list = await prisma.list.create({
     data: { userId: user.id, name: parsed.data.name, description: parsed.data.description || null },
@@ -50,10 +52,12 @@ export async function createList(_prev: ListFormState, formData: FormData): Prom
     await prisma.listItem.create({
       data: { listId: list.id, episodeId: target.episodeId, seasonId: target.seasonId, position: 1 },
     });
+  } else if (showId && wholeShow) {
+    await appendShowSeasons(list.id, showId, formData.get("includeSpecials") === "on");
   }
   await recordActivity({ userId: user.id, type: ACTIVITY_TYPE.LIST_CREATED, listId: list.id });
   refresh();
-  redirect((target && safeReturnTo(formData.get("returnTo"))) || `/lists/${list.id}`);
+  redirect((showId && safeReturnTo(formData.get("returnTo"))) || `/lists/${list.id}`);
 }
 
 export async function updateList(_prev: ListFormState, formData: FormData): Promise<ListFormState> {
@@ -96,6 +100,31 @@ export async function addToList(formData: FormData) {
     await prisma.list.update({ where: { id: listId }, data: { updatedAt: new Date() } });
   }
   refresh();
+}
+
+/** Adds every season of a show (specials optional) to a list, one item per season, skipping seasons already there. */
+export async function addShowToList(formData: FormData) {
+  const user = await requireUser();
+  const listId = z.string().parse(formData.get("listId"));
+  await ownedList(listId, user.id);
+  const showId = z.coerce.number().int().positive().parse(formData.get("showId"));
+  const includeSpecials = formData.get("includeSpecials") === "on";
+  await appendShowSeasons(listId, showId, includeSpecials);
+  refresh();
+}
+
+async function appendShowSeasons(listId: string, showId: number, includeSpecials: boolean) {
+  const { seasons } = await resolveShowSeasons(showId, includeSpecials);
+  const existing = new Set(
+    (await prisma.listItem.findMany({ where: { listId, seasonId: { in: seasons.map((s) => s.id) } }, select: { seasonId: true } })).map((i) => i.seasonId),
+  );
+  const last = await prisma.listItem.aggregate({ where: { listId }, _max: { position: true } });
+  let position = last._max.position ?? 0;
+  for (const season of seasons) {
+    if (existing.has(season.id)) continue;
+    await prisma.listItem.create({ data: { listId, seasonId: season.id, episodeId: null, position: ++position } });
+  }
+  await prisma.list.update({ where: { id: listId }, data: { updatedAt: new Date() } });
 }
 
 export async function removeFromList(formData: FormData) {

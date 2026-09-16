@@ -6,8 +6,11 @@ import { TargetFields } from "@/components/forms";
 
 export interface NewListTarget {
   showId: number;
-  seasonNumber: number;
+  /** Absent for a whole-show target (every season becomes an item). */
+  seasonNumber?: number;
   episodeNumber?: number;
+  /** Whole-show only: also add the Specials season. */
+  includeSpecials?: boolean;
   /** Human-readable name of the item, e.g. "Ted Lasso S1E2 · Biscuits". */
   label: string;
   returnTo: string;
@@ -20,10 +23,19 @@ export function NewListForm({ target }: { target?: NewListTarget | null }) {
       <h1 className="text-xl font-semibold">New list</h1>
       {target && (
         <>
-          <TargetFields showId={target.showId} seasonNumber={target.seasonNumber} episodeNumber={target.episodeNumber} />
+          {target.seasonNumber != null ? (
+            <TargetFields showId={target.showId} seasonNumber={target.seasonNumber} episodeNumber={target.episodeNumber} />
+          ) : (
+            <>
+              <input type="hidden" name="showId" value={target.showId} />
+              <input type="hidden" name="wholeShow" value="1" />
+              {target.includeSpecials && <input type="hidden" name="includeSpecials" value="on" />}
+            </>
+          )}
           <input type="hidden" name="returnTo" value={target.returnTo} />
           <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">
-            <span className="font-medium">{target.label}</span> will be added as the first item.
+            <span className="font-medium">{target.label}</span>{" "}
+            {target.seasonNumber != null ? "will be added as the first item." : `— every season${target.includeSpecials ? " (including specials)" : ""} will be added.`}
           </p>
         </>
       )}
