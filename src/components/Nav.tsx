@@ -41,7 +41,7 @@ export async function Nav() {
                 )}
               </Link>
               <Link href={`/u/${user.username}`} className="navlink font-medium">
-                @{user.username}
+                Profile
               </Link>
               <Link href="/settings" className="navlink">Settings</Link>
               <form action={logout}>

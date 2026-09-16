@@ -10,7 +10,7 @@ type Props = LayoutProps<"/u/[username]">;
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const ctx = await loadProfile((await props.params).username);
-  return { title: ctx ? ctx.owner.displayName ?? `@${ctx.owner.username}` : "User" };
+  return { title: ctx ? ctx.owner.displayName ?? ctx.owner.username : "User" };
 }
 
 export default async function ProfileLayout(props: Props) {
@@ -51,8 +51,8 @@ export default async function ProfileLayout(props: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            {owner.displayName ?? `@${owner.username}`}
-            {owner.displayName && <span className="ml-2 text-base font-normal text-muted">@{owner.username}</span>}
+            {owner.displayName ?? owner.username}
+            {owner.displayName && <span className="ml-2 text-base font-normal text-muted">{owner.username}</span>}
             {owner.isPrivate && <span className="ml-2 rounded bg-background px-1.5 py-0.5 text-xs font-medium text-muted">Private</span>}
           </h1>
           {owner.bio && canView && <p className="mt-1 max-w-xl text-sm">{owner.bio}</p>}

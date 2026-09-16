@@ -45,7 +45,7 @@ export default async function ListPage(props: Props) {
         <p className="text-sm text-muted">
           List by{" "}
           <Link href={`/u/${list.user.username}`} className="hover:underline">
-            {list.user.displayName ?? `@${list.user.username}`}
+            {list.user.displayName ?? list.user.username}
           </Link>
         </p>
         <h1 className="text-3xl font-semibold tracking-tight">{list.name}</h1>

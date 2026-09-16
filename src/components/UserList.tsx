@@ -25,8 +25,8 @@ export function UserList({
             {u.username[0].toUpperCase()}
           </div>
           <Link href={`/u/${u.username}`} className="min-w-0 flex-1 text-sm hover:underline">
-            <span className="font-medium">{u.displayName ?? `@${u.username}`}</span>
-            {u.displayName && <span className="ml-2 text-muted">@{u.username}</span>}
+            <span className="font-medium">{u.displayName ?? u.username}</span>
+            {u.displayName && <span className="ml-2 text-muted">{u.username}</span>}
             {u.isPrivate && <span className="ml-2 text-xs text-muted">· private</span>}
           </Link>
           {renderAction?.(u)}

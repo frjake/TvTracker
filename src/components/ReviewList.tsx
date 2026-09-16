@@ -18,7 +18,7 @@ export function ReviewList({ reviews, emptyText = "No reviews yet." }: { reviews
         <li key={r.id} className="card">
           <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
             <Link href={`/u/${r.user.username}`} className="font-medium hover:underline">
-              {r.user.displayName ?? `@${r.user.username}`}
+              {r.user.displayName ?? r.user.username}
             </Link>
             {r.rating != null && <span className="font-semibold text-accent tabular-nums">{r.rating}%</span>}
             <span className="text-xs text-muted">{formatDate(r.updatedAt)}</span>

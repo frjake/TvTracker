@@ -40,7 +40,7 @@ export function ActivityItem({ activity: a, showUser = true }: { activity: FeedI
   const item = itemLink(a);
   const who = showUser ? (
     <Link href={`/u/${a.user.username}`} className="font-medium hover:underline">
-      {a.user.displayName ?? `@${a.user.username}`}
+      {a.user.displayName ?? a.user.username}
     </Link>
   ) : (
     <span className="font-medium">You</span>
