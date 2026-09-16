@@ -5,7 +5,7 @@ import { z } from "zod";
 import { recordActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { ACTIVITY_TYPE, RATING_MAX, RATING_MIN } from "@/lib/constants";
-import { combineDateWithNow, isDateString } from "@/lib/dates";
+import { combineDateWithNow, dateKey, isDateString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { resolveTarget } from "@/lib/targets";
 
@@ -163,6 +163,52 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
 
   // One feed row for the whole season rather than one per episode.
   await recordActivity({ userId: user.id, type: ACTIVITY_TYPE.LOG, seasonId: season.id });
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Edits a diary entry's date, rating, review text and rewatch flag. A rating/review left on
+ * the entry also updates the standing one (same rule as creating an entry); clearing them
+ * from the entry leaves the standing rating/review untouched. A changed date is stamped
+ * with the current time of day, an unchanged date keeps the original timestamp.
+ */
+export async function updateLogEntry(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const id = z.string().parse(formData.get("id"));
+  const parsed = parseLogFields(formData);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const { watchedOn, rating, reviewText, containsSpoilers, rewatch } = parsed.data;
+
+  const entry = await prisma.logEntry.findUnique({ where: { id } });
+  if (!entry || entry.userId !== user.id) return { error: "Log entry not found" };
+
+  const dateChanged = dateKey(entry.watchedAt) !== watchedOn;
+  await prisma.logEntry.update({
+    where: { id },
+    data: {
+      watchedAt: dateChanged ? combineDateWithNow(watchedOn) : entry.watchedAt,
+      rating: rating ?? null,
+      reviewText: reviewText || null,
+      rewatch,
+    },
+  });
+
+  const episodeId = entry.episodeId;
+  if (rating != null) {
+    await prisma.rating.upsert({
+      where: { userId_episodeId: { userId: user.id, episodeId } },
+      create: { userId: user.id, episodeId, value: rating },
+      update: { value: rating },
+    });
+  }
+  if (reviewText) {
+    await prisma.review.upsert({
+      where: { userId_episodeId: { userId: user.id, episodeId } },
+      create: { userId: user.id, episodeId, body: reviewText, containsSpoilers },
+      update: { body: reviewText, containsSpoilers },
+    });
+  }
   refresh();
   return { ok: true };
 }

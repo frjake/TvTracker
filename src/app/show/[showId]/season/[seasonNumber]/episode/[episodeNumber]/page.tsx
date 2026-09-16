@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { deleteLogEntry } from "@/app/actions/watch";
 import { AddToListMenu } from "@/components/AddToListMenu";
 import { CreditsSection } from "@/components/CreditsSection";
+import { EditLogEntry } from "@/components/EditLogEntry";
 import { LogDialog } from "@/components/LogDialog";
 import { RatingControl } from "@/components/RatingControl";
 import { ReviewForm } from "@/components/ReviewForm";
@@ -15,7 +16,7 @@ import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureEpisode } from "@/lib/cache";
 import { ensureEpisodeCredits } from "@/lib/credits";
-import { formatDate, todayString } from "@/lib/dates";
+import { dateKey, formatDate, todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { tmdbPercent } from "@/lib/ratings";
 import { visibleReviewsFor } from "@/lib/reviews";
@@ -145,12 +146,17 @@ export default async function EpisodePage(props: Props) {
           <h2 className="mb-2 text-lg font-semibold">Your log</h2>
           <ul className="divide-y divide-line rounded-lg border border-line">
             {userLogs.map((entry) => (
-              <li key={entry.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <span>
+              <li key={entry.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
+                <span className="flex-1">
                   Watched {formatDate(entry.watchedAt)}
                   {entry.rewatch && <span className="ml-2 rounded bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Rewatch</span>}
                   {entry.rating != null && <span className="ml-2 font-semibold text-accent">{entry.rating}%</span>}
+                  {entry.reviewText && <span className="ml-2 line-clamp-1 text-xs text-muted">{entry.reviewText}</span>}
                 </span>
+                <EditLogEntry
+                  entry={{ id: entry.id, watchedOn: dateKey(entry.watchedAt), rating: entry.rating, reviewText: entry.reviewText, rewatch: entry.rewatch }}
+                  today={todayString()}
+                />
                 <form action={deleteLogEntry}>
                   <input type="hidden" name="id" value={entry.id} />
                   <SubmitButton className="text-xs text-muted underline hover:text-red-600" pendingText="Removing…">Remove</SubmitButton>
