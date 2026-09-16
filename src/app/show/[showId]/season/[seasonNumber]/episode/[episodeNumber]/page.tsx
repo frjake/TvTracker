@@ -99,7 +99,13 @@ export default async function EpisodePage(props: Props) {
                 watched={!!watchedMark || userLogs.length > 0}
                 viaLog={userLogs.length > 0}
               />
-              <LogDialog showId={show.id} seasonNumber={season.seasonNumber} episodeNumber={ep.episodeNumber} today={todayString()} />
+              <LogDialog
+                showId={show.id}
+                seasonNumber={season.seasonNumber}
+                episodeNumber={ep.episodeNumber}
+                today={todayString()}
+                alreadyWatched={!!watchedMark || userLogs.length > 0}
+              />
               <AddToListMenu userId={viewer.id} showId={show.id} seasonNumber={season.seasonNumber} episodeNumber={ep.episodeNumber} episodeId={ep.id} />
             </div>
           ) : (
@@ -142,6 +148,7 @@ export default async function EpisodePage(props: Props) {
               <li key={entry.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <span>
                   Watched {formatDate(entry.watchedAt)}
+                  {entry.rewatch && <span className="ml-2 rounded bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Rewatch</span>}
                   {entry.rating != null && <span className="ml-2 font-semibold text-accent">{entry.rating}%</span>}
                 </span>
                 <form action={deleteLogEntry}>

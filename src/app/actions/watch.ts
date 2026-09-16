@@ -72,6 +72,7 @@ const logSchema = z.object({
   rating: ratingField,
   reviewText: z.string().trim().max(10_000).optional(),
   containsSpoilers: z.boolean(),
+  rewatch: z.boolean(),
 });
 
 function parseLogFields(formData: FormData) {
@@ -80,6 +81,7 @@ function parseLogFields(formData: FormData) {
     rating: formData.get("rating"),
     reviewText: formData.get("reviewText") ?? undefined,
     containsSpoilers: formData.get("containsSpoilers") === "on",
+    rewatch: formData.get("rewatch") === "on",
   });
 }
 
@@ -88,7 +90,7 @@ export async function logEpisode(_prev: ActionState, formData: FormData): Promis
   const user = await requireUser();
   const parsed = parseLogFields(formData);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  const { watchedOn, rating, reviewText, containsSpoilers } = parsed.data;
+  const { watchedOn, rating, reviewText, containsSpoilers, rewatch } = parsed.data;
 
   const { episodeId } = await resolveTarget(formData);
   if (episodeId == null) return { error: "Episode required" };
@@ -100,6 +102,7 @@ export async function logEpisode(_prev: ActionState, formData: FormData): Promis
       watchedAt: combineDateWithNow(watchedOn),
       rating: rating ?? null,
       reviewText: reviewText || null,
+      rewatch,
     },
   });
 
@@ -128,7 +131,7 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
   const user = await requireUser();
   const parsed = parseLogFields(formData);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  const { watchedOn, rating, reviewText, containsSpoilers } = parsed.data;
+  const { watchedOn, rating, reviewText, containsSpoilers, rewatch } = parsed.data;
 
   const { season } = await resolveTarget(formData);
   if (season.episodes.length === 0) return { error: "This season has no episodes yet" };
@@ -139,6 +142,7 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
       userId: user.id,
       episodeId: ep.id,
       watchedAt: combineDateWithNow(watchedOn, i, now),
+      rewatch,
     })),
   });
 

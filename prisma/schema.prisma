@@ -136,6 +136,7 @@ model LogEntry {
   watchedAt  DateTime
   rating     Int? // 0-100 snapshot at log time
   reviewText String?
+  rewatch    Boolean  @default(false) // the user had already seen this episode
   createdAt  DateTime @default(now())
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)

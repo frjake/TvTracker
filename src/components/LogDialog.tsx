@@ -15,6 +15,7 @@ export function LogDialog({
   episodeNumber,
   today,
   episodeCount,
+  alreadyWatched = false,
 }: {
   showId: number;
   seasonNumber: number;
@@ -22,6 +23,8 @@ export function LogDialog({
   today: string;
   /** For season logging: how many entries will be created. */
   episodeCount?: number;
+  /** Pre-checks "Already watched" when the episode (or every episode of the season) was marked or logged before. */
+  alreadyWatched?: boolean;
 }) {
   const isSeason = episodeNumber == null;
   const [open, setOpen] = useState(false);
@@ -64,9 +67,15 @@ export function LogDialog({
         </label>
         <textarea id="log-review" name="reviewText" rows={3} className="input mt-1" placeholder="What did you think?" />
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="containsSpoilers" className="accent-accent" /> Contains spoilers
-      </label>
+      <div className="flex flex-wrap gap-x-6 gap-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="rewatch" defaultChecked={alreadyWatched} className="accent-accent" /> Already watched
+          <span className="text-xs text-muted">(this is a rewatch)</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="containsSpoilers" className="accent-accent" /> Contains spoilers
+        </label>
+      </div>
       {state?.error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{state.error}</p>}
       <div className="flex gap-2">
         <button type="submit" className="btn-primary" disabled={pending}>

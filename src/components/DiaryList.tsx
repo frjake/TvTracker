@@ -10,6 +10,7 @@ export interface DiaryEntry {
   watchedAt: Date;
   rating: number | null;
   reviewText: string | null;
+  rewatch: boolean;
   episode: {
     id: number;
     name: string;
@@ -51,6 +52,7 @@ export function DiaryList({ entries, canEdit }: { entries: DiaryEntry[]; canEdit
                     <Link href={href} className="font-medium hover:underline">
                       {ep.show.name} <span className="text-muted">S{ep.seasonNumber}E{ep.episodeNumber}</span> · {ep.name}
                     </Link>
+                    {e.rewatch && <span className="ml-2 rounded bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Rewatch</span>}
                     {e.reviewText && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{e.reviewText}</p>}
                   </div>
                   {e.rating != null && <span className="text-sm font-semibold text-accent tabular-nums">{e.rating}%</span>}

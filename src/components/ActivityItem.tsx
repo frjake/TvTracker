@@ -52,7 +52,7 @@ export function ActivityItem({ activity: a, showUser = true }: { activity: FeedI
   switch (a.type) {
     case ACTIVITY_TYPE.LOG:
       if (a.logEntry) {
-        verb = <>watched</>;
+        verb = a.logEntry.rewatch ? <>rewatched</> : <>watched</>;
         detail = (
           <>
             <span className="text-xs text-muted">on {formatDate(a.logEntry.watchedAt)}</span>

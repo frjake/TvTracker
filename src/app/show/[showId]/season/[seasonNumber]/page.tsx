@@ -91,7 +91,7 @@ export default async function SeasonPage(props: Props) {
                   {allWatched ? "✓ All watched" : "Mark all watched"}
                 </SubmitButton>
               </form>
-              <LogDialog showId={season.showId} seasonNumber={season.seasonNumber} today={todayString()} episodeCount={season.episodes.length} />
+              <LogDialog showId={season.showId} seasonNumber={season.seasonNumber} today={todayString()} episodeCount={season.episodes.length} alreadyWatched={allWatched} />
               <AddToListMenu userId={viewer.id} showId={season.showId} seasonNumber={season.seasonNumber} seasonId={season.id} />
             </div>
           ) : (
