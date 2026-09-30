@@ -9,13 +9,15 @@ interface Props {
   firstAirDate?: string | null;
   /** Small line under the title, e.g. "Because you watched Ted Lasso". */
   caption?: string | null;
+  /** Where the card links; defaults to the show page. */
+  href?: string;
 }
 
-export function ShowCard({ id, name, posterPath, firstAirDate, caption }: Props) {
+export function ShowCard({ id, name, posterPath, firstAirDate, caption, href }: Props) {
   const poster = imageUrl(posterPath, "w342");
   const year = firstAirDate?.slice(0, 4);
   return (
-    <Link href={`/show/${id}`} className="group block">
+    <Link href={href ?? `/show/${id}`} className="group block">
       <div className="aspect-[2/3] overflow-hidden rounded-md border border-line bg-surface">
         {poster ? (
           <Image

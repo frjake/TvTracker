@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ActivityItem } from "@/components/ActivityItem";
+import { RecentlyWatched } from "@/components/RecentlyWatched";
 import { Recommendations, RecommendationsSkeleton } from "@/components/Recommendations";
 import { ShowCard, ShowGrid } from "@/components/ShowCard";
 import { UserList } from "@/components/UserList";
@@ -78,6 +79,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {user && <RecentlyWatched userId={user.id} />}
 
       {user && (
         <Suspense fallback={<RecommendationsSkeleton />}>
