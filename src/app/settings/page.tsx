@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { PasswordForm, ProfileForm } from "./SettingsForms";
 
@@ -18,6 +19,14 @@ export default async function SettingsPage() {
           episodes, ratings, reviews, followers and following, plus one file for each of your lists.
         </p>
         <a href="/settings/export" download className="btn-secondary self-start">Download account data (.zip)</a>
+      </section>
+      <section className="card flex flex-col gap-3">
+        <h2 className="font-semibold">Import data</h2>
+        <p className="text-sm text-muted">
+          Add the diary, watched episodes, ratings, reviews and lists from a TvTracker export (.zip) to this account.
+          Duplicates are skipped and you&apos;ll see a preview first.
+        </p>
+        <Link href="/settings/import" className="btn-secondary self-start">Import from a file…</Link>
       </section>
     </div>
   );

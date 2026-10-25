@@ -31,6 +31,10 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
 - **Export your data** – Settings → "Download account data" gives a Letterboxd-style .zip of
   CSV files: profile, diary, watched, ratings, reviews, followers, following, a lists index
   and one file per list.
+- **Import your data** – Settings → "Import from a file…" merges such a .zip into the account:
+  a preview shows what would be added vs. what's already there (and any rows that can't be
+  matched) before anything is written. Duplicates are skipped, so importing twice is safe;
+  profile and follows aren't imported, and imports don't create feed activity.
 - **Follows & feed** – follow people to get their activity on your home page. Accounts can be
   made private: follow requests then need approval, and only accepted followers can see the
   profile, log, reviews and lists. Ratings from private accounts still count in averages.

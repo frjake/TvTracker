@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvField, fileSafeName, toCsv, uniqueNames } from "@/lib/csv";
+import { csvField, fileSafeName, parseCsv, toCsv, uniqueNames } from "@/lib/csv";
 
 describe("csvField", () => {
   it("leaves plain values alone", () => {
@@ -43,5 +43,19 @@ describe("file names", () => {
   });
   it("de-duplicates in order", () => {
     expect(uniqueNames(["a", "a", "b", "a"])).toEqual(["a", "a-2", "b", "a-3"]);
+  });
+});
+
+describe("parseCsv", () => {
+  it("round-trips what toCsv writes, including quotes, commas and newlines", () => {
+    const rows = [["Show", "Review"], ["Ted Lasso", 'He said "believe", twice\nthen left'], ["Lasso, Ted", ""]];
+    expect(parseCsv(toCsv(rows[0], rows.slice(1)))).toEqual(rows);
+  });
+  it("accepts LF and CR line endings, a BOM, and a missing trailing newline", () => {
+    expect(parseCsv("\uFEFFa,b\n1,2")).toEqual([["a", "b"], ["1", "2"]]);
+    expect(parseCsv("a,b\r1,2\r")).toEqual([["a", "b"], ["1", "2"]]);
+  });
+  it("drops blank lines and keeps empty fields", () => {
+    expect(parseCsv("a,b\r\n\r\n,\r\n")).toEqual([["a", "b"], ["", ""]]);
   });
 });

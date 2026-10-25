@@ -102,16 +102,17 @@ export async function buildAccountExport(userId: string): Promise<Record<string,
       .map(({ date, episode: e }) => [dateKey(date), e.show.name, year(e.show), e.seasonNumber, e.episodeNumber, e.name, e.show.id]),
   );
 
+  const showIdOf = (x: { episode: EpisodeLite | null; season: SeasonLite | null }) => x.episode?.show.id ?? x.season?.show.id ?? "";
   files["ratings.csv"] = toCsv(
-    ["Date", ...TARGET_HEADERS, "Rating"],
-    ratings.map((r) => [dateKey(r.updatedAt), ...targetCells(r.episode, r.season), r.value]),
+    ["Date", ...TARGET_HEADERS, "Rating", "TMDB Show ID"],
+    ratings.map((r) => [dateKey(r.updatedAt), ...targetCells(r.episode, r.season), r.value, showIdOf(r)]),
   );
 
   // Pair each review with the author's standing rating of the same item, like Letterboxd.
   const ratingFor = (episodeId: number | null, seasonId: number | null) =>
     ratings.find((r) => (episodeId != null ? r.episodeId === episodeId : r.seasonId === seasonId))?.value ?? null;
   files["reviews.csv"] = toCsv(
-    ["Date", ...TARGET_HEADERS, "Rating", "Review", "Contains Spoilers", "Last Edited"],
+    ["Date", ...TARGET_HEADERS, "Rating", "Review", "Contains Spoilers", "Last Edited", "TMDB Show ID"],
     reviews.map((r) => [
       dateKey(r.createdAt),
       ...targetCells(r.episode, r.season),
@@ -119,6 +120,7 @@ export async function buildAccountExport(userId: string): Promise<Record<string,
       r.body,
       r.containsSpoilers,
       iso(r.updatedAt),
+      showIdOf(r),
     ]),
   );
 
