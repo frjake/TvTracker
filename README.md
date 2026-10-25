@@ -28,6 +28,9 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
   rating (doubling every 50 points), TMDB's recommendations for the top six are merged, and
   anything you've watched or put on a list is excluded. Each poster says which show it's
   "because" of.
+- **Export your data** – Settings → "Download account data" gives a Letterboxd-style .zip of
+  CSV files: profile, diary, watched, ratings, reviews, followers, following, a lists index
+  and one file per list.
 - **Follows & feed** – follow people to get their activity on your home page. Accounts can be
   made private: follow requests then need approval, and only accepted followers can see the
   profile, log, reviews and lists. Ratings from private accounts still count in averages.

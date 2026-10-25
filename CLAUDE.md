@@ -22,7 +22,7 @@ accounts. TV metadata from TMDB, cached in SQLite. See `README.md` for setup and
 
 - `npm run dev` – dev server. `npm run check` = lint + typecheck + Vitest. `npm run build` for prod.
 - Schema change → edit `prisma/schema.prisma` → `npm run db:migrate -- --name <what>`.
-- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`, `people`, `recommend`); anything importing `server-only` can't be unit-tested there.
+- Unit tests live in `tests/` and only cover pure modules (`ratings`, `policies`, `dates`, `people`, `recommend`, `progress`, `navigation`, `csv`); anything importing `server-only` can't be unit-tested there.
 
 ## Repo map
 
@@ -44,6 +44,8 @@ src/lib/credits.ts    ensureShowCredits / ensureSeasonCredits / ensureEpisodeCre
                       ensurePerson, ensurePersonFilmography (PersonTvCredit), scanShow/SeasonEpisodeCredits (batched)
 src/lib/recommend.ts  PURE: recencyWeight, ratingFactor, buildSeeds, mergeCandidates + tuning constants (HALF_LIFE_DAYS…)
 src/lib/recommendations.ts recommendationsFor(userId): watches+marks → seeds → TMDB /recommendations → merge, excludes watched + listed
+src/lib/csv.ts        PURE: csvField/toCsv (RFC 4180, CRLF), fileSafeName, uniqueNames
+src/lib/export.ts     buildAccountExport(userId) → { "path.csv": text } for the account export
 src/lib/people.ts     PURE: isKeyCrew, progressState, parseFilmographyQuery, prepareShows/prepareEpisodes (filter→group→sort),
                       headerSortHref/activeSortDir (column-header sort cycle), filmographyHref
 src/app/actions/      'use server' files: auth, watch (watched/log/rate/review), lists, follows, settings, credits (scans)
@@ -55,7 +57,7 @@ src/components/       Nav, ShowCard, ScoreBadge, WatchedToggle, RatingControl, L
 
 Routes: `/`, `/search` (Shows/People tabs via `?tab=`), `/show/[showId]`, `/show/[showId]/season/[n]`, `.../episode/[e]`, `/log`,
 `/lists/new`, `/lists/[listId]`, `/u/[username]` (+ `/log /reviews /lists /followers /following`),
-`/requests`, `/settings`, `/login`, `/register`, `/person/[personId]`, `/show/[showId]/cast`, `.../season/[n]/cast`.
+`/requests`, `/settings` (+ `GET /settings/export` route handler → zip of CSVs), `/login`, `/register`, `/person/[personId]`, `/show/[showId]/cast`, `.../season/[n]/cast`.
 
 ## Conventions (keep these true)
 
