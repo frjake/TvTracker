@@ -40,7 +40,7 @@ export function DiaryList({ entries, canEdit }: { entries: DiaryEntry[]; canEdit
       {groups.map((g) => (
         <section key={g.key}>
           <h3 className="mb-2 text-sm font-semibold text-muted" aria-label={`${formatDateLong(g.date)}, ${g.entries.length} episode${g.entries.length === 1 ? "" : "s"} logged`}>
-            {formatDateLong(g.date)} - {g.entries.length}
+            {formatDateLong(g.date)} - {g.entries.length} episode{g.entries.length === 1 ? "" : "s"}
           </h3>
           <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
             {g.entries.map((e) => {
