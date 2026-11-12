@@ -5,7 +5,7 @@ import { z } from "zod";
 import { recordActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { ACTIVITY_TYPE, RATING_MAX, RATING_MIN } from "@/lib/constants";
-import { combineDateWithNow, dateKey, isDateString } from "@/lib/dates";
+import { dateKey, dayBounds, endOfDayTimestamp, isDateString } from "@/lib/dates";
 import { ensureSeason } from "@/lib/cache";
 import { prisma } from "@/lib/db";
 import { resolveShowSeasons, resolveTarget } from "@/lib/targets";
@@ -18,6 +18,17 @@ const ratingField = z.preprocess(
   (v) => (v === "" || v == null ? undefined : v),
   z.coerce.number().int().min(RATING_MIN).max(RATING_MAX).optional(),
 );
+
+/** The user's latest diary entry on a YYYY-MM-DD day (optionally ignoring one entry). */
+async function latestLogOnDay(userId: string, dateStr: string, excludeId?: string): Promise<Date | null> {
+  const { start, end } = dayBounds(dateStr);
+  const latest = await prisma.logEntry.findFirst({
+    where: { userId, watchedAt: { gte: start, lt: end }, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    orderBy: { watchedAt: "desc" },
+    select: { watchedAt: true },
+  });
+  return latest?.watchedAt ?? null;
+}
 
 /** Every mutation touches several pages (item, diary, profile, feed); refresh them all. */
 function refresh() {
@@ -131,7 +142,8 @@ export async function logEpisode(_prev: ActionState, formData: FormData): Promis
     data: {
       userId: user.id,
       episodeId,
-      watchedAt: combineDateWithNow(watchedOn),
+      // Always the last entry of its day, even when backdated.
+      watchedAt: endOfDayTimestamp(watchedOn, await latestLogOnDay(user.id, watchedOn)),
       rating: rating ?? null,
       reviewText: reviewText || null,
       rewatch,
@@ -168,12 +180,14 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
   const { season } = await resolveTarget(formData);
   if (season.episodes.length === 0) return { error: "This season has no episodes yet" };
 
+  // After the day's existing entries, one second apart in episode order.
   const now = new Date();
+  const latest = await latestLogOnDay(user.id, watchedOn);
   await prisma.logEntry.createMany({
     data: season.episodes.map((ep, i) => ({
       userId: user.id,
       episodeId: ep.id,
-      watchedAt: combineDateWithNow(watchedOn, i, now),
+      watchedAt: endOfDayTimestamp(watchedOn, latest, now, i),
       rewatch,
     })),
   });
@@ -202,8 +216,8 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
 /**
  * Edits a diary entry's date, rating, review text and rewatch flag. A rating/review left on
  * the entry also updates the standing one (same rule as creating an entry); clearing them
- * from the entry leaves the standing rating/review untouched. A changed date is stamped
- * with the current time of day, an unchanged date keeps the original timestamp.
+ * from the entry leaves the standing rating/review untouched. A changed date makes the entry
+ * the last one of its new day; an unchanged date keeps the original timestamp.
  */
 export async function updateLogEntry(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
@@ -215,11 +229,15 @@ export async function updateLogEntry(_prev: ActionState, formData: FormData): Pr
   const entry = await prisma.logEntry.findUnique({ where: { id } });
   if (!entry || entry.userId !== user.id) return { error: "Log entry not found" };
 
-  const dateChanged = dateKey(entry.watchedAt) !== watchedOn;
+  // Moving an entry to another day makes it the last entry of that day.
+  let watchedAt = entry.watchedAt;
+  if (dateKey(entry.watchedAt) !== watchedOn) {
+    watchedAt = endOfDayTimestamp(watchedOn, await latestLogOnDay(user.id, watchedOn, id));
+  }
   await prisma.logEntry.update({
     where: { id },
     data: {
-      watchedAt: dateChanged ? combineDateWithNow(watchedOn) : entry.watchedAt,
+      watchedAt,
       rating: rating ?? null,
       reviewText: reviewText || null,
       rewatch,

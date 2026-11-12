@@ -36,6 +36,24 @@ export function combineDateWithNow(dateStr: string, offsetSeconds = 0, now = new
   return result;
 }
 
+/** Midnight at the start of a YYYY-MM-DD day and of the following day (local time). */
+export function dayBounds(dateStr: string): { start: Date; end: Date } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return { start: new Date(y, m - 1, d), end: new Date(y, m - 1, d + 1) };
+}
+
+/**
+ * Timestamp that makes an entry the last one on `dateStr`: the current time of day on that
+ * date, or one second after `latestOnDay` when that is later. `offsetSeconds` spaces out a
+ * batch (a whole season) after that point, in order. Never spills into the next day.
+ */
+export function endOfDayTimestamp(dateStr: string, latestOnDay: Date | null, now = new Date(), offsetSeconds = 0): Date {
+  const candidate = combineDateWithNow(dateStr, 0, now);
+  const base = !latestOnDay || candidate > latestOnDay ? candidate.getTime() : latestOnDay.getTime() + 1000;
+  const lastMs = dayBounds(dateStr).end.getTime() - 1;
+  return new Date(Math.min(base + offsetSeconds * 1000, lastMs));
+}
+
 export function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
