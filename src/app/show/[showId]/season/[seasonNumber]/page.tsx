@@ -12,10 +12,11 @@ import { ReviewForm } from "@/components/ReviewForm";
 import { ReviewList } from "@/components/ReviewList";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { SubmitButton, TargetFields } from "@/components/forms";
+import { airedEpisodes, seasonProgress } from "@/lib/airing";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureSeason } from "@/lib/cache";
 import { ensureSeasonCredits } from "@/lib/credits";
-import { todayString } from "@/lib/dates";
+import { formatDate, todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { adjacentSeasons } from "@/lib/navigation";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
@@ -58,7 +59,11 @@ export default async function SeasonPage(props: Props) {
   const { prev: prevSeason, next: nextSeason } = adjacentSeasons(allSeasons, season.seasonNumber);
 
   const watched = new Set<number>([...marks.map((m) => m.episodeId), ...logged.map((l) => l.episodeId)]);
-  const allWatched = episodeIds.length > 0 && episodeIds.every((id) => watched.has(id));
+  // Upcoming episodes don't count until watched, and bulk actions skip them.
+  const today = todayString();
+  const aired = new Set(airedEpisodes(season, today).map((e) => e.id));
+  const progress = seasonProgress(season, watched, today);
+  const allWatched = aired.size > 0 && [...aired].every((id) => watched.has(id));
   const poster = imageUrl(season.posterPath ?? season.show.posterPath, "w342");
   const base = `/show/${season.showId}/season/${season.seasonNumber}`;
 
@@ -84,18 +89,29 @@ export default async function SeasonPage(props: Props) {
             {season.episodes.length} episodes{season.airDate && ` · ${season.airDate.slice(0, 4)}`}
           </p>
           <ScoreBadge score={score} tmdbPercent={tmdbPercent(season.tmdbVoteAverage)} size="lg" />
-          {viewer && <ProgressLabel watched={watched.size} total={season.episodes.length} />}
+          {viewer && <ProgressLabel watched={progress.watched} total={progress.total} />}
+          {aired.size < season.episodes.length && (
+            <p className="text-sm text-muted">
+              {aired.size === 0
+                ? season.airDate ? `Premieres ${formatDate(new Date(`${season.airDate}T12:00:00`))}.` : "Not aired yet."
+                : `${season.episodes.length - aired.size} upcoming episode${season.episodes.length - aired.size === 1 ? "" : "s"}.`}
+            </p>
+          )}
           {season.overview && <p className="max-w-2xl text-sm leading-relaxed">{season.overview}</p>}
 
           {viewer ? (
             <div className="mt-2 flex flex-wrap items-start gap-2">
-              <form action={allWatched ? unmarkSeasonWatched : markSeasonWatched}>
-                <TargetFields showId={season.showId} seasonNumber={season.seasonNumber} />
-                <SubmitButton className={allWatched ? "btn-secondary border-accent text-accent" : "btn-secondary"} pendingText="Saving…">
-                  {allWatched ? "✓ All watched" : "Mark all watched"}
-                </SubmitButton>
-              </form>
-              <LogDialog showId={season.showId} seasonNumber={season.seasonNumber} today={todayString()} episodeCount={season.episodes.length} alreadyWatched={allWatched} />
+              {aired.size > 0 && (
+                <>
+                  <form action={allWatched ? unmarkSeasonWatched : markSeasonWatched}>
+                    <TargetFields showId={season.showId} seasonNumber={season.seasonNumber} />
+                    <SubmitButton className={allWatched ? "btn-secondary border-accent text-accent" : "btn-secondary"} pendingText="Saving…">
+                      {allWatched ? "✓ All watched" : "Mark all watched"}
+                    </SubmitButton>
+                  </form>
+                  <LogDialog showId={season.showId} seasonNumber={season.seasonNumber} today={today} episodeCount={aired.size} alreadyWatched={allWatched} />
+                </>
+              )}
               <AddToListMenu userId={viewer.id} showId={season.showId} seasonNumber={season.seasonNumber} seasonId={season.id} />
             </div>
           ) : (
@@ -136,7 +152,10 @@ export default async function SeasonPage(props: Props) {
                     <td className="px-3 py-2">
                       <Link href={`${base}/episode/${ep.episodeNumber}`} className="font-medium hover:underline">{ep.name}</Link>
                     </td>
-                    <td className="px-3 py-2 text-muted">{ep.airDate ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted">
+                      {ep.airDate ?? "—"}
+                      {!aired.has(ep.id) && <span className="ml-2 rounded bg-background px-1.5 py-0.5 text-xs">Upcoming</span>}
+                    </td>
                     <td className="px-3 py-2"><ScoreBadge score={epScore} size="sm" /></td>
                     {viewer && (
                       <td className="px-3 py-2 text-center text-accent" aria-label={watched.has(ep.id) ? "Watched" : "Not watched"}>

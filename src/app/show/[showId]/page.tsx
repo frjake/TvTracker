@@ -7,9 +7,11 @@ import { CreditsSection } from "@/components/CreditsSection";
 import { MarkShowWatched } from "@/components/MarkShowWatched";
 import { ProgressLabel } from "@/components/ProgressLabel";
 import { ScoreBadge } from "@/components/ScoreBadge";
+import { uncachedSeasonTotal } from "@/lib/airing";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureShow } from "@/lib/cache";
 import { ensureShowCredits } from "@/lib/credits";
+import { formatDate, todayString } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { type ShowWatchCounts, showProgress } from "@/lib/progress";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
@@ -34,6 +36,7 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
   if (!show) notFound();
 
   const viewer = await getCurrentUser();
+  const today = todayString();
   const [averages, score, credits, showWatched, seasonWatched] = await Promise.all([
     seasonAveragesForShow(show.id),
     showScore(show.id, show.tmdbVoteAverage),
@@ -126,9 +129,12 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
                       {viewer && (
                         <ProgressLabel
                           watched={seasonWatched.get(season.id)?.watched ?? 0}
-                          total={seasonWatched.get(season.id)?.total || season.episodeCount}
+                          total={seasonWatched.get(season.id)?.total ?? uncachedSeasonTotal(season, today)}
                           compact
                         />
+                      )}
+                      {season.airDate && season.airDate > today && (
+                        <span className="text-xs text-muted">Premieres {formatDate(new Date(`${season.airDate}T12:00:00`))}</span>
                       )}
                     </div>
                   </div>

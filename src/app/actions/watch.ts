@@ -5,7 +5,8 @@ import { z } from "zod";
 import { recordActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { ACTIVITY_TYPE, RATING_MAX, RATING_MIN } from "@/lib/constants";
-import { dateKey, dayBounds, endOfDayTimestamp, isDateString } from "@/lib/dates";
+import { airedEpisodes } from "@/lib/airing";
+import { dateKey, dayBounds, endOfDayTimestamp, isDateString, todayString } from "@/lib/dates";
 import { ensureSeason } from "@/lib/cache";
 import { prisma } from "@/lib/db";
 import { resolveShowSeasons, resolveTarget } from "@/lib/targets";
@@ -53,13 +54,14 @@ export async function toggleWatched(formData: FormData) {
   refresh();
 }
 
-/** Marks every episode of the season watched (idempotent). */
+/** Marks every aired episode of the season watched (idempotent). */
 export async function markSeasonWatched(formData: FormData) {
   const user = await requireUser();
   const { season } = await resolveTarget(formData);
 
+  // Upcoming episodes are skipped; they can still be marked one at a time.
   await prisma.$transaction(
-    season.episodes.map((ep) =>
+    airedEpisodes(season, todayString()).map((ep) =>
       prisma.watchedMark.upsert({
         where: { userId_episodeId: { userId: user.id, episodeId: ep.id } },
         create: { userId: user.id, episodeId: ep.id },
@@ -77,7 +79,7 @@ export async function unmarkSeasonWatched(formData: FormData) {
   refresh();
 }
 
-/** Marks every episode of every season watched (specials optional). Fetches seasons as needed. */
+/** Marks every aired episode of every season watched (specials optional). Fetches seasons as needed. */
 export async function markShowWatched(formData: FormData) {
   const user = await requireUser();
   const showId = z.coerce.number().int().positive().parse(formData.get("showId"));
@@ -88,7 +90,7 @@ export async function markShowWatched(formData: FormData) {
     const season = await ensureSeason(showId, s.seasonNumber);
     if (!season) continue;
     await prisma.$transaction(
-      season.episodes.map((ep) =>
+      airedEpisodes(season, todayString()).map((ep) =>
         prisma.watchedMark.upsert({
           where: { userId_episodeId: { userId: user.id, episodeId: ep.id } },
           create: { userId: user.id, episodeId: ep.id },
@@ -170,7 +172,7 @@ export async function logEpisode(_prev: ActionState, formData: FormData): Promis
   return { ok: true };
 }
 
-/** Logs every episode of a season on one day, 1 s apart so episode order is preserved. */
+/** Logs every aired episode of a season on one day, 1 s apart so episode order is preserved. */
 export async function logSeason(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
   const parsed = parseLogFields(formData);
@@ -178,13 +180,15 @@ export async function logSeason(_prev: ActionState, formData: FormData): Promise
   const { watchedOn, rating, reviewText, containsSpoilers, rewatch } = parsed.data;
 
   const { season } = await resolveTarget(formData);
-  if (season.episodes.length === 0) return { error: "This season has no episodes yet" };
+  // Only episodes that have aired; upcoming ones can still be logged individually.
+  const episodes = airedEpisodes(season, todayString());
+  if (episodes.length === 0) return { error: "None of this season's episodes have aired yet" };
 
   // After the day's existing entries, one second apart in episode order.
   const now = new Date();
   const latest = await latestLogOnDay(user.id, watchedOn);
   await prisma.logEntry.createMany({
-    data: season.episodes.map((ep, i) => ({
+    data: episodes.map((ep, i) => ({
       userId: user.id,
       episodeId: ep.id,
       watchedAt: endOfDayTimestamp(watchedOn, latest, now, i),

@@ -9,6 +9,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canEdit } from "@/lib/policies";
 import { sumProgress } from "@/lib/progress";
+import { uncachedSeasonTotal } from "@/lib/airing";
+import { todayString } from "@/lib/dates";
 import { seasonWatchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
 import { viewerCanSee } from "@/lib/social";
 import { imageUrl } from "@/lib/tmdb";
@@ -51,8 +53,8 @@ export default async function ListPage(props: Props) {
   const progressOf = (item: (typeof list.items)[number]) => {
     if (item.episodeId != null) return { watched: seenEpisodes.has(item.episodeId) ? 1 : 0, total: 1 };
     if (item.seasonId != null) {
-      const c = seasonCounts.get(item.seasonId);
-      return c && c.total > 0 ? c : { watched: 0, total: item.season?.episodeCount ?? 0 };
+      // Cached seasons count aired episodes only; uncached ones count nothing before they premiere.
+      return seasonCounts.get(item.seasonId) ?? { watched: 0, total: item.season ? uncachedSeasonTotal(item.season, todayString()) : 0 };
     }
     return null;
   };

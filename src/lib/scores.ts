@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
+import { todayString } from "./dates";
 import { prisma } from "./db";
 import type { ShowWatchCounts } from "./progress";
 import { type Score, scoreFrom } from "./ratings";
@@ -92,19 +93,38 @@ export async function userShowAveragesFor(userId: string, showIds: number[]): Pr
   return toMap(rows);
 }
 
+/**
+ * SQL mirror of src/lib/airing.ts for an Episode aliased `e`, its Season `se` and Show `sh`:
+ * dated episodes have aired once their date arrives; undated ones when their season has started
+ * (season date, any dated episode, or — for specials — the show's first air date).
+ */
+function airedSql(today: string) {
+  return Prisma.sql`(CASE WHEN e.airDate IS NOT NULL THEN e.airDate <= ${today}
+    ELSE ((se.airDate IS NOT NULL AND se.airDate <= ${today})
+      OR EXISTS (SELECT 1 FROM Episode x WHERE x.seasonId = e.seasonId AND x.airDate IS NOT NULL AND x.airDate <= ${today})
+      OR (e.seasonNumber = 0 AND sh.firstAirDate IS NOT NULL AND sh.firstAirDate <= ${today})) END)`;
+}
+
+function watchedSql(userId: string) {
+  return Prisma.sql`(e.id IN (SELECT episodeId FROM WatchedMark WHERE userId = ${userId})
+    OR e.id IN (SELECT episodeId FROM LogEntry WHERE userId = ${userId}))`;
+}
+
 /** Distinct episodes the user has watched (marked OR logged) per show, specials counted separately. */
 export async function watchedCountsFor(userId: string, showIds: number[]): Promise<Map<number, ShowWatchCounts>> {
   if (showIds.length === 0) return new Map();
-  const rows = await prisma.$queryRaw<{ showId: number; regular: number | bigint; specials: number | bigint }[]>`
+  const aired = airedSql(todayString());
+  const rows = await prisma.$queryRaw<{ showId: number; regular: number | bigint; specials: number | bigint; unaired: number | bigint }[]>`
     SELECT e.showId AS showId,
            SUM(CASE WHEN e.seasonNumber = 0 THEN 0 ELSE 1 END) AS regular,
-           SUM(CASE WHEN e.seasonNumber = 0 THEN 1 ELSE 0 END) AS specials
-    FROM Episode e
-    WHERE e.showId IN (${Prisma.join(showIds)})
-      AND (e.id IN (SELECT episodeId FROM WatchedMark WHERE userId = ${userId})
-        OR e.id IN (SELECT episodeId FROM LogEntry WHERE userId = ${userId}))
+           SUM(CASE WHEN e.seasonNumber = 0 THEN 1 ELSE 0 END) AS specials,
+           SUM(CASE WHEN e.seasonNumber <> 0 AND NOT ${aired} THEN 1 ELSE 0 END) AS unaired
+    FROM Episode e JOIN Season se ON se.id = e.seasonId JOIN Show sh ON sh.id = e.showId
+    WHERE e.showId IN (${Prisma.join(showIds)}) AND ${watchedSql(userId)}
     GROUP BY e.showId`;
-  return new Map(rows.map((r) => [Number(r.showId), { regular: Number(r.regular), specials: Number(r.specials) }]));
+  return new Map(
+    rows.map((r) => [Number(r.showId), { regular: Number(r.regular), specials: Number(r.specials), unaired: Number(r.unaired) }]),
+  );
 }
 
 /** Community score for a whole show: users' episode-rating mean, else TMDB. */
@@ -114,21 +134,21 @@ export async function showScore(showId: number, tmdbVoteAverage: number | null |
 }
 
 /**
- * Per-season watched/total for the user. `total` counts cached Episode rows; callers fall
- * back to Season.episodeCount when a season's episodes haven't been fetched yet.
+ * Per-season watched/total for the user, counting only aired episodes (plus upcoming ones already
+ * watched). Callers fall back to uncachedSeasonTotal when a season's episodes aren't cached yet.
  */
 export async function seasonWatchedCountsFor(
   userId: string,
   seasonIds: number[],
 ): Promise<Map<number, { watched: number; total: number }>> {
   if (seasonIds.length === 0) return new Map();
+  // Total = aired episodes + any upcoming ones already watched (see seasonProgress in airing.ts).
+  const watched = watchedSql(userId);
   const rows = await prisma.$queryRaw<{ seasonId: number; watched: number | bigint; total: number | bigint }[]>`
     SELECT e.seasonId AS seasonId,
-           COUNT(*) AS total,
-           SUM(CASE WHEN e.id IN (SELECT episodeId FROM WatchedMark WHERE userId = ${userId})
-                      OR e.id IN (SELECT episodeId FROM LogEntry WHERE userId = ${userId})
-                    THEN 1 ELSE 0 END) AS watched
-    FROM Episode e
+           SUM(CASE WHEN ${airedSql(todayString())} OR ${watched} THEN 1 ELSE 0 END) AS total,
+           SUM(CASE WHEN ${watched} THEN 1 ELSE 0 END) AS watched
+    FROM Episode e JOIN Season se ON se.id = e.seasonId JOIN Show sh ON sh.id = e.showId
     WHERE e.seasonId IN (${Prisma.join(seasonIds)})
     GROUP BY e.seasonId`;
   return new Map(rows.map((r) => [Number(r.seasonId), { watched: Number(r.watched), total: Number(r.total) }]));

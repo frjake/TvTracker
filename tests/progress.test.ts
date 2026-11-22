@@ -43,6 +43,10 @@ describe("showProgress", () => {
     expect(showProgress({ regular: 4, specials: 0 }, 10)).toEqual({ watched: 4, total: 10 });
     expect(showProgress(undefined, 10)).toEqual({ watched: 0, total: 10 });
   });
+  it("counts an upcoming episode watched early on both sides", () => {
+    expect(showProgress({ regular: 33, specials: 0, unaired: 1 }, 32)).toEqual({ watched: 33, total: 33 });
+    expect(showProgress({ regular: 32, specials: 0, unaired: 0 }, 32)).toEqual({ watched: 32, total: 32 });
+  });
   it("keeps the total unknown when TMDB's is", () => {
     expect(showProgress({ regular: 2, specials: 1 }, null)).toEqual({ watched: 3, total: null });
   });

@@ -3,6 +3,8 @@ import { ProgressLabel } from "@/components/ProgressLabel";
 import { prisma } from "@/lib/db";
 import { loadProfile } from "@/lib/profile";
 import { sumProgress } from "@/lib/progress";
+import { uncachedSeasonTotal } from "@/lib/airing";
+import { todayString } from "@/lib/dates";
 import { seasonWatchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
 
 export default async function ProfileListsPage(props: PageProps<"/u/[username]/lists">) {
@@ -13,7 +15,7 @@ export default async function ProfileListsPage(props: PageProps<"/u/[username]/l
     where: { userId: ctx.owner.id },
     include: {
       _count: { select: { items: true } },
-      items: { select: { episodeId: true, seasonId: true, season: { select: { episodeCount: true } } } },
+      items: { select: { episodeId: true, seasonId: true, season: { select: { episodeCount: true, airDate: true } } } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -31,8 +33,7 @@ export default async function ProfileListsPage(props: PageProps<"/u/[username]/l
       l.items.map((i) => {
         if (i.episodeId != null) return { watched: seen.has(i.episodeId) ? 1 : 0, total: 1 };
         if (i.seasonId != null) {
-          const c = seasonCounts.get(i.seasonId);
-          return c && c.total > 0 ? c : { watched: 0, total: i.season?.episodeCount ?? 0 };
+          return seasonCounts.get(i.seasonId) ?? { watched: 0, total: i.season ? uncachedSeasonTotal(i.season, todayString()) : 0 };
         }
         return null;
       }),
