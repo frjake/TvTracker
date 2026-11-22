@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "./db";
+import type { ShowWatchCounts } from "./progress";
 import { type Score, scoreFrom } from "./ratings";
 
 export async function episodeScore(
@@ -91,17 +92,19 @@ export async function userShowAveragesFor(userId: string, showIds: number[]): Pr
   return toMap(rows);
 }
 
-/** Distinct episodes the user has watched (marked OR logged) per show. */
-export async function watchedCountsFor(userId: string, showIds: number[]): Promise<Map<number, number>> {
+/** Distinct episodes the user has watched (marked OR logged) per show, specials counted separately. */
+export async function watchedCountsFor(userId: string, showIds: number[]): Promise<Map<number, ShowWatchCounts>> {
   if (showIds.length === 0) return new Map();
-  const rows = await prisma.$queryRaw<{ showId: number; count: number }[]>`
-    SELECT e.showId AS showId, COUNT(*) AS count
+  const rows = await prisma.$queryRaw<{ showId: number; regular: number | bigint; specials: number | bigint }[]>`
+    SELECT e.showId AS showId,
+           SUM(CASE WHEN e.seasonNumber = 0 THEN 0 ELSE 1 END) AS regular,
+           SUM(CASE WHEN e.seasonNumber = 0 THEN 1 ELSE 0 END) AS specials
     FROM Episode e
     WHERE e.showId IN (${Prisma.join(showIds)})
       AND (e.id IN (SELECT episodeId FROM WatchedMark WHERE userId = ${userId})
         OR e.id IN (SELECT episodeId FROM LogEntry WHERE userId = ${userId}))
     GROUP BY e.showId`;
-  return new Map(rows.map((r) => [Number(r.showId), Number(r.count)]));
+  return new Map(rows.map((r) => [Number(r.showId), { regular: Number(r.regular), specials: Number(r.specials) }]));
 }
 
 /** Community score for a whole show: users' episode-rating mean, else TMDB. */

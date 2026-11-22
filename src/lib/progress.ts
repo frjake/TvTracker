@@ -25,3 +25,20 @@ export function sumProgress(parts: (Progress | null | undefined)[]): Progress {
   }
   return { watched, total };
 }
+
+/** Distinct episodes of one show the user has watched, split into regular seasons and specials (season 0). */
+export interface ShowWatchCounts {
+  regular: number;
+  specials: number;
+}
+
+/**
+ * Whole-show progress. TMDB's episode total covers regular seasons only, so each special the
+ * user has watched counts toward both sides: 10/10 regular + 1 special → 11/11, and a special
+ * watched first → 1/11. Unwatched specials never count. `total` is null when TMDB's is unknown.
+ */
+export function showProgress(counts: ShowWatchCounts | null | undefined, regularTotal: number | null | undefined): { watched: number; total: number | null } {
+  const regular = counts?.regular ?? 0;
+  const specials = counts?.specials ?? 0;
+  return { watched: regular + specials, total: regularTotal == null ? null : regularTotal + specials };
+}

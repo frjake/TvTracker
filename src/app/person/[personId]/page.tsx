@@ -26,6 +26,7 @@ import {
   progressState,
   yearOf,
 } from "@/lib/people";
+import { type ShowWatchCounts, showProgress } from "@/lib/progress";
 import { scoreFrom } from "@/lib/ratings";
 import { showAveragesFor, userShowAveragesFor, watchedCountsFor } from "@/lib/scores";
 import { imageUrl } from "@/lib/tmdb";
@@ -75,7 +76,7 @@ export default async function PersonPage(props: Props) {
     }),
     showAveragesFor(showIds),
     viewer ? userShowAveragesFor(viewer.id, showIds) : new Map<number, { average: number | null; count: number }>(),
-    viewer ? watchedCountsFor(viewer.id, showIds) : new Map<number, number>(),
+    viewer ? watchedCountsFor(viewer.id, showIds) : new Map<number, ShowWatchCounts>(),
     prisma.credit.findMany({
       where: { personId: person.id, seasonId: null, episodeId: null, kind: CREDIT_KIND.CAST, order: { not: null } },
       select: { showId: true, order: true },
@@ -92,6 +93,7 @@ export default async function PersonPage(props: Props) {
 
   const showRows: ShowRow[] = filmography.map((f) => {
     const cached = showById.get(f.showId);
+    const progress = showProgress(watchedCounts.get(f.showId), cached?.numberOfEpisodes);
     return {
       creditId: f.id,
       showId: f.showId,
@@ -108,8 +110,8 @@ export default async function PersonPage(props: Props) {
       communityCount: communityAvg.get(f.showId)?.count ?? 0,
       yourScore: yourAvg.get(f.showId)?.average ?? null,
       billing: billing.get(f.showId) ?? null,
-      watchedCount: watchedCounts.get(f.showId) ?? 0,
-      totalEpisodes: cached?.numberOfEpisodes ?? null,
+      watchedCount: progress.watched,
+      totalEpisodes: progress.total,
       cached: !!cached,
       scanned: !!cached?.episodeCreditsScannedAt,
     };

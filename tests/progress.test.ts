@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { percentWatched, sumProgress } from "@/lib/progress";
+import { percentWatched, showProgress, sumProgress } from "@/lib/progress";
 
 describe("percentWatched", () => {
   it("rounds down and clamps", () => {
@@ -27,5 +27,23 @@ describe("sumProgress", () => {
   });
   it("caps each part at its own total", () => {
     expect(sumProgress([{ watched: 15, total: 10 }])).toEqual({ watched: 10, total: 10 });
+  });
+});
+
+describe("showProgress", () => {
+  it("adds watched specials to both sides", () => {
+    expect(showProgress({ regular: 10, specials: 0 }, 10)).toEqual({ watched: 10, total: 10 });
+    expect(showProgress({ regular: 10, specials: 1 }, 10)).toEqual({ watched: 11, total: 11 });
+  });
+  it("works when the special is watched first", () => {
+    expect(showProgress({ regular: 0, specials: 1 }, 10)).toEqual({ watched: 1, total: 11 });
+    expect(percentWatched(1, 11)).toBe(9);
+  });
+  it("never counts unwatched specials and treats a missing row as nothing watched", () => {
+    expect(showProgress({ regular: 4, specials: 0 }, 10)).toEqual({ watched: 4, total: 10 });
+    expect(showProgress(undefined, 10)).toEqual({ watched: 0, total: 10 });
+  });
+  it("keeps the total unknown when TMDB's is", () => {
+    expect(showProgress({ regular: 2, specials: 1 }, null)).toEqual({ watched: 3, total: null });
   });
 });

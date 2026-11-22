@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ensureShow } from "@/lib/cache";
 import { ensureShowCredits } from "@/lib/credits";
 import { prisma } from "@/lib/db";
+import { type ShowWatchCounts, showProgress } from "@/lib/progress";
 import { scoreFrom, tmdbPercent } from "@/lib/ratings";
 import { seasonAveragesForShow, seasonWatchedCountsFor, showScore, watchedCountsFor } from "@/lib/scores";
 import { imageUrl } from "@/lib/tmdb";
@@ -37,7 +38,7 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
     seasonAveragesForShow(show.id),
     showScore(show.id, show.tmdbVoteAverage),
     ensureShowCredits(show.id).catch(() => []),
-    viewer ? watchedCountsFor(viewer.id, [show.id]) : new Map<number, number>(),
+    viewer ? watchedCountsFor(viewer.id, [show.id]) : new Map<number, ShowWatchCounts>(),
     viewer ? seasonWatchedCountsFor(viewer.id, show.seasons.map((s) => s.id)) : new Map<number, { watched: number; total: number }>(),
   ]);
   const poster = imageUrl(show.posterPath, "w342");
@@ -57,8 +58,9 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
         })
       ).map((l) => ({ id: l.id, name: l.name, present: l.items.length }))
     : [];
-  const watchedCount = showWatched.get(show.id) ?? 0;
-  const allWatched = show.numberOfEpisodes != null && show.numberOfEpisodes > 0 && watchedCount >= show.numberOfEpisodes;
+  // Watched specials count toward both sides (10/10 + a special → 11/11).
+  const progress = showProgress(showWatched.get(show.id), show.numberOfEpisodes);
+  const allWatched = progress.total != null && progress.total > 0 && progress.watched >= progress.total;
 
   return (
     <div className="flex flex-col gap-8">
@@ -85,7 +87,7 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
               {show.numberOfSeasons != null && <span>{show.numberOfSeasons} season{show.numberOfSeasons === 1 ? "" : "s"}</span>}
             </div>
             <ScoreBadge score={score} tmdbPercent={tmdbPercent(show.tmdbVoteAverage)} size="lg" />
-            {viewer && <ProgressLabel watched={watchedCount} total={show.numberOfEpisodes} />}
+            {viewer && <ProgressLabel watched={progress.watched} total={progress.total} />}
             {viewer && (
               <div className="mt-1 flex flex-wrap items-start gap-2">
                 <MarkShowWatched showId={show.id} allWatched={allWatched} hasSpecials={hasSpecials} />
