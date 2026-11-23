@@ -2,10 +2,10 @@ import Link from "next/link";
 import { ProgressLabel } from "@/components/ProgressLabel";
 import { prisma } from "@/lib/db";
 import { loadProfile } from "@/lib/profile";
-import { sumProgress } from "@/lib/progress";
+import { type ShowWatchCounts, showProgress, sumProgress } from "@/lib/progress";
 import { uncachedSeasonTotal } from "@/lib/airing";
 import { todayString } from "@/lib/dates";
-import { seasonWatchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
+import { seasonWatchedCountsFor, watchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
 
 export default async function ProfileListsPage(props: PageProps<"/u/[username]/lists">) {
   const ctx = await loadProfile((await props.params).username);
@@ -15,23 +15,30 @@ export default async function ProfileListsPage(props: PageProps<"/u/[username]/l
     where: { userId: ctx.owner.id },
     include: {
       _count: { select: { items: true } },
-      items: { select: { episodeId: true, seasonId: true, season: { select: { episodeCount: true, airDate: true } } } },
+      items: {
+        select: { episodeId: true, seasonId: true, showId: true, season: { select: { episodeCount: true, airDate: true } }, show: { select: { numberOfEpisodes: true } } },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
 
   // Viewer's progress through each list.
   const allItems = lists.flatMap((l) => l.items);
-  const [seen, seasonCounts] = ctx.viewer
+  const [seen, seasonCounts, showCounts] = ctx.viewer
     ? await Promise.all([
         watchedEpisodeIds(ctx.viewer.id, allItems.flatMap((i) => (i.episodeId != null ? [i.episodeId] : []))),
         seasonWatchedCountsFor(ctx.viewer.id, allItems.flatMap((i) => (i.seasonId != null ? [i.seasonId] : []))),
+        watchedCountsFor(ctx.viewer.id, allItems.flatMap((i) => (i.showId != null ? [i.showId] : []))),
       ])
-    : [new Set<number>(), new Map<number, { watched: number; total: number }>()];
+    : [new Set<number>(), new Map<number, { watched: number; total: number }>(), new Map<number, ShowWatchCounts>()];
   const progressOf = (l: (typeof lists)[number]) =>
     sumProgress(
       l.items.map((i) => {
         if (i.episodeId != null) return { watched: seen.has(i.episodeId) ? 1 : 0, total: 1 };
+        if (i.showId != null) {
+          const p = showProgress(showCounts.get(i.showId), i.show?.numberOfEpisodes);
+          return p.total == null ? null : { watched: p.watched, total: p.total };
+        }
         if (i.seasonId != null) {
           return seasonCounts.get(i.seasonId) ?? { watched: 0, total: i.season ? uncachedSeasonTotal(i.season, todayString()) : 0 };
         }

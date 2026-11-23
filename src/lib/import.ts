@@ -7,7 +7,7 @@ import { dateKey } from "./dates";
 import { prisma } from "./db";
 import {
   type ImportProblem,
-  type ImportTarget,
+  type ListItemTarget,
   type ShowRef,
   normalizeZipPath,
   parseExportFiles,
@@ -56,10 +56,14 @@ export function readExportZip(bytes: Uint8Array): Record<string, string> {
 
 const nameKey = (name: string, year: string) => `${name.toLocaleLowerCase()}|${year}`;
 
-function describe(t: ImportTarget): string {
+function describe(t: ListItemTarget): string {
   const show = t.show.name || `TMDB show ${t.show.tmdbId}`;
+  if (t.kind === "show") return show;
   return t.kind === "episode" ? `${show} S${t.season}E${t.episode}` : `${show} season ${t.season}`;
 }
+
+/** Cached ids for a row: exactly one of the three is set. */
+type TargetIds = { episodeId: number | null; seasonId: number | null; showId: number | null };
 
 class TargetResolver {
   private idsByName = new Map<string, number>();
@@ -128,15 +132,29 @@ class TargetResolver {
   }
 
   /** Cached ids for a target, fetching from TMDB only when the row isn't cached yet. */
-  async resolve(t: ImportTarget): Promise<{ episodeId: number | null; seasonId: number | null } | null> {
+  /** A cached show row (fetched from TMDB if needed), for whole-show list items. */
+  private async cachedShowId(showId: number): Promise<number | null> {
+    if (await prisma.show.findUnique({ where: { id: showId }, select: { id: true } })) return showId;
+    try {
+      return (await ensureShow(showId))?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async resolve(t: ListItemTarget): Promise<TargetIds | null> {
     const showId = await this.showId(t.show);
     if (showId == null) return null;
+    if (t.kind === "show") {
+      const id = await this.cachedShowId(showId);
+      return id == null ? null : { episodeId: null, seasonId: null, showId: id };
+    }
     if (t.kind === "episode") {
       const episodeId = await this.episodeId(showId, t.season, t.episode);
-      return episodeId == null ? null : { episodeId, seasonId: null };
+      return episodeId == null ? null : { episodeId, seasonId: null, showId: null };
     }
     const seasonId = await this.seasonId(showId, t.season);
-    return seasonId == null ? null : { episodeId: null, seasonId };
+    return seasonId == null ? null : { episodeId: null, seasonId, showId: null };
   }
 }
 
@@ -167,7 +185,7 @@ export interface ImportSummary {
 interface NewList {
   name: string;
   description: string | null;
-  items: { episodeId: number | null; seasonId: number | null; position: number; note: string | null }[];
+  items: (TargetIds & { position: number; note: string | null })[];
 }
 
 export interface ImportPlan {
@@ -190,8 +208,8 @@ function noonOf(date: string, seconds = 0): Date {
   return new Date(y, m - 1, d, 12, 0, seconds);
 }
 
-const itemKey = (ids: { episodeId: number | null; seasonId: number | null }) =>
-  ids.episodeId != null ? `e${ids.episodeId}` : `s${ids.seasonId}`;
+const itemKey = (ids: { episodeId: number | null; seasonId: number | null; showId?: number | null }) =>
+  ids.episodeId != null ? `e${ids.episodeId}` : ids.seasonId != null ? `s${ids.seasonId}` : `w${ids.showId}`;
 
 const emptySection = (): SectionSummary => ({ total: 0, add: 0, skip: 0, problems: 0 });
 
@@ -205,7 +223,7 @@ export async function planImport(userId: string, files: Record<string, string>):
     prisma.watchedMark.findMany({ where: { userId }, select: { episodeId: true } }),
     prisma.rating.findMany({ where: { userId }, select: { episodeId: true, seasonId: true } }),
     prisma.review.findMany({ where: { userId }, select: { episodeId: true, seasonId: true } }),
-    prisma.list.findMany({ where: { userId }, include: { items: { select: { episodeId: true, seasonId: true, position: true } } } }),
+    prisma.list.findMany({ where: { userId }, include: { items: { select: { episodeId: true, seasonId: true, showId: true, position: true } } } }),
     prisma.show.findMany({ select: { id: true, name: true, firstAirDate: true } }),
   ]);
 
@@ -217,7 +235,7 @@ export async function planImport(userId: string, files: Record<string, string>):
     ...parsed.reviews.map((r) => r.target.show),
   ];
   const resolver = new TargetResolver(allRefs, knownShows);
-  const unmatched = (file: string, row: number, target: ImportTarget) =>
+  const unmatched = (file: string, row: number, target: ListItemTarget) =>
     problems.push({ file, row, message: `Couldn't find ${describe(target)} on TMDB.` });
 
   const writes: ImportPlan["writes"] = { logs: [], marks: [], ratings: [], reviews: [], newLists: [], appendItems: [], touchedListIds: [] };
@@ -321,7 +339,7 @@ export async function planImport(userId: string, files: Record<string, string>):
     }
     ratedKeys.add(key);
     const at = r.date ? noonOf(r.date) : now;
-    writes.ratings.push({ userId, ...ids, value: r.value, createdAt: at, updatedAt: at });
+    writes.ratings.push({ userId, episodeId: ids.episodeId, seasonId: ids.seasonId, value: r.value, createdAt: at, updatedAt: at });
     summary.ratings.add += 1;
   }
 
@@ -343,7 +361,8 @@ export async function planImport(userId: string, files: Record<string, string>):
     const at = r.date ? noonOf(r.date) : now;
     writes.reviews.push({
       userId,
-      ...ids,
+      episodeId: ids.episodeId,
+      seasonId: ids.seasonId,
       body: r.body.slice(0, 10_000),
       containsSpoilers: r.spoilers,
       createdAt: at,
@@ -354,7 +373,7 @@ export async function planImport(userId: string, files: Record<string, string>):
 
   // Lists: matched by name (case-insensitive). Existing lists get the missing items appended in
   // order; new lists are created with their items. Two lists with the same name in one file merge.
-  type ListTarget = { present: Set<string>; add: (ids: { episodeId: number | null; seasonId: number | null }, note: string | null) => void };
+  type ListTarget = { present: Set<string>; add: (ids: TargetIds, note: string | null) => void };
   const listTargets = new Map<string, ListTarget>();
   const targetFor = (name: string, description: string | null): ListTarget => {
     const key = name.toLocaleLowerCase();

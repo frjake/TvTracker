@@ -9,7 +9,9 @@ export interface NewListTarget {
   /** Absent for a whole-show target (every season becomes an item). */
   seasonNumber?: number;
   episodeNumber?: number;
-  /** Whole-show only: also add the Specials season. */
+  /** Whole-show only: one list item for the show, or one per season. */
+  mode?: "show" | "seasons";
+  /** Whole-show "seasons" mode only: also add the Specials season. */
   includeSpecials?: boolean;
   /** Human-readable name of the item, e.g. "Ted Lasso S1E2 · Biscuits". */
   label: string;
@@ -29,13 +31,16 @@ export function NewListForm({ target }: { target?: NewListTarget | null }) {
             <>
               <input type="hidden" name="showId" value={target.showId} />
               <input type="hidden" name="wholeShow" value="1" />
+              <input type="hidden" name="mode" value={target.mode ?? "show"} />
               {target.includeSpecials && <input type="hidden" name="includeSpecials" value="on" />}
             </>
           )}
           <input type="hidden" name="returnTo" value={target.returnTo} />
           <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">
             <span className="font-medium">{target.label}</span>{" "}
-            {target.seasonNumber != null ? "will be added as the first item." : `— every season${target.includeSpecials ? " (including specials)" : ""} will be added.`}
+            {target.seasonNumber != null || target.mode !== "seasons"
+              ? "will be added as the first item."
+              : `— every season${target.includeSpecials ? " (including specials)" : ""} will be added.`}
           </p>
         </>
       )}

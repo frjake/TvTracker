@@ -4,7 +4,7 @@ import { type NewListTarget, NewListForm } from "./NewListForm";
 
 export const metadata = { title: "New list" };
 
-/** Reads ?showId=[&wholeShow=1[&includeSpecials=on]|&seasonNumber=[&episodeNumber=]]&returnTo= from an "Add to list → New list" click. */
+/** Reads ?showId=[&wholeShow=1&mode=show|seasons[&includeSpecials=on]|&seasonNumber=[&episodeNumber=]]&returnTo= from an "Add to list → New list" click. */
 async function readTarget(sp: Record<string, string | string[] | undefined>): Promise<NewListTarget | null> {
   const showId = Number(sp.showId);
   if (!Number.isInteger(showId) || showId <= 0) return null;
@@ -13,7 +13,8 @@ async function readTarget(sp: Record<string, string | string[] | undefined>): Pr
   if (sp.wholeShow === "1") {
     const show = await ensureShow(showId);
     if (!show) return null;
-    return { showId, includeSpecials: sp.includeSpecials === "on", label: show.name, returnTo };
+    const mode = sp.mode === "seasons" ? "seasons" : "show";
+    return { showId, mode, includeSpecials: mode === "seasons" && sp.includeSpecials === "on", label: show.name, returnTo };
   }
 
   const seasonNumber = Number(sp.seasonNumber);

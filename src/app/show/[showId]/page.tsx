@@ -48,7 +48,7 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
   const backdrop = imageUrl(show.backdropPath, "w1280");
   const year = show.firstAirDate?.slice(0, 4);
 
-  // Whole-show controls (signed in): lists with how many of this show's seasons they hold, and
+  // Whole-show controls (signed in): lists with whether they hold the show and how many of its seasons, and
   // whether every regular episode is already watched.
   const regularSeasons = show.seasons.filter((s) => s.seasonNumber !== 0 && (s.episodeCount ?? 0) > 0);
   const hasSpecials = show.seasons.some((s) => s.seasonNumber === 0 && (s.episodeCount ?? 0) > 0);
@@ -57,9 +57,16 @@ export default async function ShowPage(props: PageProps<"/show/[showId]">) {
         await prisma.list.findMany({
           where: { userId: viewer.id },
           orderBy: { updatedAt: "desc" },
-          include: { items: { where: { season: { showId: show.id } }, select: { id: true } } },
+          include: {
+            items: { where: { OR: [{ season: { showId: show.id } }, { showId: show.id }] }, select: { seasonId: true, showId: true } },
+          },
         })
-      ).map((l) => ({ id: l.id, name: l.name, present: l.items.length }))
+      ).map((l) => ({
+        id: l.id,
+        name: l.name,
+        present: l.items.filter((i) => i.seasonId != null).length,
+        hasShow: l.items.some((i) => i.showId != null),
+      }))
     : [];
   // Watched specials count toward both sides (10/10 + a special → 11/11).
   const progress = showProgress(showWatched.get(show.id), show.numberOfEpisodes);

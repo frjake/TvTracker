@@ -17,9 +17,10 @@ const iso = (d: Date) => d.toISOString();
 
 /** Shared columns for anything that targets an episode or a whole season. */
 const TARGET_HEADERS = ["Show", "Year", "Type", "Season", "Episode", "Title"];
-function targetCells(episode: EpisodeLite | null, season: SeasonLite | null): CsvValue[] {
+function targetCells(episode: EpisodeLite | null, season: SeasonLite | null, show: ShowLite | null = null): CsvValue[] {
   if (episode) return [episode.show.name, year(episode.show), "Episode", episode.seasonNumber, episode.episodeNumber, episode.name];
   if (season) return [season.show.name, year(season.show), "Season", season.seasonNumber, "", season.name];
+  if (show) return [show.name, year(show), "Show", "", "", show.name];
   return ["", "", "", "", "", ""];
 }
 
@@ -48,7 +49,7 @@ export async function buildAccountExport(userId: string): Promise<Record<string,
     }),
     prisma.list.findMany({
       where: { userId },
-      include: { items: { orderBy: { position: "asc" }, include: { episode: episodeInclude, season: seasonInclude } } },
+      include: { items: { orderBy: { position: "asc" }, include: { episode: episodeInclude, season: seasonInclude, show: showSelect } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.follow.findMany({
@@ -134,9 +135,9 @@ export async function buildAccountExport(userId: string): Promise<Record<string,
       ["Position", ...TARGET_HEADERS, "Note", "TMDB Show ID"],
       l.items.map((item, idx) => [
         idx + 1,
-        ...targetCells(item.episode, item.season),
+        ...targetCells(item.episode, item.season, item.show),
         item.note,
-        item.episode?.show.id ?? item.season?.show.id ?? "",
+        item.episode?.show.id ?? item.season?.show.id ?? item.show?.id ?? "",
       ]),
     );
   });

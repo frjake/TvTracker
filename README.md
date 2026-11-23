@@ -14,7 +14,8 @@ they're watching. TV metadata comes from [TMDB](https://www.themoviedb.org/).
   "TMDB"). Reviews can be marked as containing spoilers.
 - **Watched marks** – tick episodes (or a whole season) as already seen without adding them to
   the log.
-- **Lists** – ordered lists of episodes and/or seasons, with notes-free reordering.
+- **Lists** – ordered lists of episodes, seasons and whole shows. Adding a show lets you choose
+  one item for the whole show or one item per season (with or without specials).
 - **Cast & crew** – every show, season and episode lists its cast (plus guest stars on
   episodes) and key crew (directing, writing, creators, executive producers). Click anyone to
   see their other shows, sortable by release date, community rating, your rating, billing

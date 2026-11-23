@@ -81,7 +81,8 @@ Routes: `/`, `/search` (Shows/People tabs via `?tab=`), `/show/[showId]`, `/show
    (`combineDateWithNow`); season logs add 1 s per episode. Sort `watchedAt desc, createdAt desc`;
    show the date only. "Watched" = `WatchedMark` OR any `LogEntry`.
 6. **Polymorphic targets** (`Rating`, `Review`, `ListItem`, `Activity`) set exactly one of
-   `episodeId` / `seasonId`; SQLite's NULL-distinct unique indexes make the per-user uniques work.
+   `episodeId` / `seasonId` — `ListItem` may instead set `showId` for a whole-show item. SQLite's
+   NULL-distinct unique indexes make the per-user / per-list uniques work.
 7. **Never export non-action helpers from a `'use server'` file** — every export becomes a
    public POST endpoint. Shared helpers go in `src/lib`.
 8. **`Follow.status` and `Activity.type` are strings**; allowed values are in `src/lib/constants.ts`.

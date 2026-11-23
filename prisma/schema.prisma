@@ -65,9 +65,10 @@ model Show {
   creditsFetchedAt        DateTime? // aggregate credits cached
   episodeCreditsScannedAt DateTime? // every episode's credits cached
 
-  seasons  Season[]
-  episodes Episode[]
-  credits  Credit[]
+  seasons   Season[]
+  episodes  Episode[]
+  credits   Credit[]
+  listItems ListItem[]
 }
 
 model Season {
@@ -222,11 +223,13 @@ model List {
   @@index([userId])
 }
 
+/// Targets exactly one of an episode, a season, or a whole show (showId set, the other two null).
 model ListItem {
   id        String   @id @default(cuid())
   listId    String
   episodeId Int?
   seasonId  Int?
+  showId    Int?
   position  Int
   note      String?
   createdAt DateTime @default(now())
@@ -234,9 +237,11 @@ model ListItem {
   list    List     @relation(fields: [listId], references: [id], onDelete: Cascade)
   episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   season  Season?  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  show    Show?    @relation(fields: [showId], references: [id], onDelete: Cascade)
 
   @@unique([listId, episodeId])
   @@unique([listId, seasonId])
+  @@unique([listId, showId])
   @@index([listId, position])
 }
 

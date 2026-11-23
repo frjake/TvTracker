@@ -84,6 +84,20 @@ describe("parseExportFiles", () => {
     expect(out.lists[0].items[0]).toMatchObject({ note: "the best", target: { kind: "episode", season: 1, episode: 2 } });
   });
 
+  it("reads whole-show list items, but not whole-show ratings", () => {
+    const item = ["Position", "Show", "Year", "Type", "Season", "Episode", "Title", "Note", "TMDB Show ID"];
+    const out = parseExportFiles({
+      "lists.csv": toCsv(["Name", "File"], [["Shows to start", "lists/shows-to-start.csv"]]),
+      "lists/shows-to-start.csv": toCsv(item, [[1, "INVINCIBLE", "2021", "Show", "", "", "INVINCIBLE", "", 95557]]),
+      "ratings.csv": toCsv(["Date", "Show", "Year", "Type", "Season", "Episode", "Title", "Rating", "TMDB Show ID"], [
+        ["2026-11-01", "INVINCIBLE", "2021", "Show", "", "", "INVINCIBLE", 90, 95557],
+      ]),
+    });
+    expect(out.lists[0].items[0].target).toEqual({ kind: "show", show: { tmdbId: 95557, name: "INVINCIBLE", year: "2021" } });
+    expect(out.ratings).toEqual([]);
+    expect(out.problems).toEqual([{ file: "ratings.csv", row: 2, message: "Ratings and reviews can only be for an episode or a season." }]);
+  });
+
   it("notes ignored files and recognises nothing in an unrelated zip", () => {
     const out = parseExportFiles({ "profile.csv": "Username\r\nfelix\r\n", "following.csv": "Username\r\n" });
     expect(out.ignored).toEqual(["profile.csv", "following.csv"]);

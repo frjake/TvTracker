@@ -33,7 +33,7 @@ export async function recommendationsFor(userId: string): Promise<Recommendation
     }),
     prisma.listItem.findMany({
       where: { list: { userId } },
-      select: { episode: { select: { showId: true } }, season: { select: { showId: true } } },
+      select: { showId: true, episode: { select: { showId: true } }, season: { select: { showId: true } } },
     }),
   ]);
 
@@ -54,7 +54,7 @@ export async function recommendationsFor(userId: string): Promise<Recommendation
 
   const exclude = new Set<number>(watchedShowIds);
   for (const li of listItems) {
-    const showId = li.episode?.showId ?? li.season?.showId;
+    const showId = li.showId ?? li.episode?.showId ?? li.season?.showId;
     if (showId != null) exclude.add(showId);
   }
 

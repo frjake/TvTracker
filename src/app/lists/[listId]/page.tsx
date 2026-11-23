@@ -8,10 +8,10 @@ import { SubmitButton } from "@/components/forms";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canEdit } from "@/lib/policies";
-import { sumProgress } from "@/lib/progress";
+import { type ShowWatchCounts, showProgress, sumProgress } from "@/lib/progress";
 import { uncachedSeasonTotal } from "@/lib/airing";
 import { todayString } from "@/lib/dates";
-import { seasonWatchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
+import { seasonWatchedCountsFor, watchedCountsFor, watchedEpisodeIds } from "@/lib/scores";
 import { viewerCanSee } from "@/lib/social";
 import { imageUrl } from "@/lib/tmdb";
 import { EditListForm } from "./EditListForm";
@@ -26,7 +26,7 @@ async function load(props: Props) {
       user: { select: { id: true, username: true, displayName: true, isPrivate: true } },
       items: {
         orderBy: { position: "asc" },
-        include: { episode: { include: { show: true } }, season: { include: { show: true } } },
+        include: { episode: { include: { show: true } }, season: { include: { show: true } }, show: true },
       },
     },
   });
@@ -44,14 +44,23 @@ export default async function ListPage(props: Props) {
   if (!(await viewerCanSee(viewer, list.user))) notFound();
   const owner = canEdit(viewer, list.userId);
 
-  // Viewer's own progress through the list: episodes count 1, seasons count their episodes.
+  // Viewer's own progress through the list: episodes count 1, seasons and whole shows count their episodes.
   const episodeIds = list.items.flatMap((i) => (i.episodeId != null ? [i.episodeId] : []));
   const seasonIds = list.items.flatMap((i) => (i.seasonId != null ? [i.seasonId] : []));
-  const [seenEpisodes, seasonCounts] = viewer
-    ? await Promise.all([watchedEpisodeIds(viewer.id, episodeIds), seasonWatchedCountsFor(viewer.id, seasonIds)])
-    : [new Set<number>(), new Map<number, { watched: number; total: number }>()];
+  const showIds = list.items.flatMap((i) => (i.showId != null ? [i.showId] : []));
+  const [seenEpisodes, seasonCounts, showCounts] = viewer
+    ? await Promise.all([
+        watchedEpisodeIds(viewer.id, episodeIds),
+        seasonWatchedCountsFor(viewer.id, seasonIds),
+        watchedCountsFor(viewer.id, showIds),
+      ])
+    : [new Set<number>(), new Map<number, { watched: number; total: number }>(), new Map<number, ShowWatchCounts>()];
   const progressOf = (item: (typeof list.items)[number]) => {
     if (item.episodeId != null) return { watched: seenEpisodes.has(item.episodeId) ? 1 : 0, total: 1 };
+    if (item.show) {
+      const p = showProgress(showCounts.get(item.show.id), item.show.numberOfEpisodes);
+      return p.total == null ? null : { watched: p.watched, total: p.total };
+    }
     if (item.seasonId != null) {
       // Cached seasons count aired episodes only; uncached ones count nothing before they premiere.
       return seasonCounts.get(item.seasonId) ?? { watched: 0, total: item.season ? uncachedSeasonTotal(item.season, todayString()) : 0 };
@@ -83,14 +92,18 @@ export default async function ListPage(props: Props) {
       ) : (
         <ol className="divide-y divide-line rounded-lg border border-line bg-surface">
           {list.items.map((item, i) => {
-            const show = item.episode?.show ?? item.season?.show;
+            const show = item.episode?.show ?? item.season?.show ?? item.show;
             if (!show) return null;
             const href = item.episode
               ? `/show/${show.id}/season/${item.episode.seasonNumber}/episode/${item.episode.episodeNumber}`
-              : `/show/${show.id}/season/${item.season!.seasonNumber}`;
+              : item.season
+                ? `/show/${show.id}/season/${item.season.seasonNumber}`
+                : `/show/${show.id}`;
             const label = item.episode
               ? `S${item.episode.seasonNumber}E${item.episode.episodeNumber} · ${item.episode.name}`
-              : item.season!.name;
+              : item.season
+                ? item.season.name
+                : `Whole show${show.numberOfSeasons ? ` · ${show.numberOfSeasons} season${show.numberOfSeasons === 1 ? "" : "s"}` : ""}`;
             const thumb = imageUrl(item.season?.posterPath ?? show.posterPath, "w92");
             return (
               <li key={item.id} className="flex items-center gap-3 px-3 py-2">

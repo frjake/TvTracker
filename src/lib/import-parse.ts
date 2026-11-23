@@ -20,7 +20,11 @@ export interface ShowRef {
 
 export type EpisodeTarget = { kind: "episode"; show: ShowRef; season: number; episode: number };
 export type SeasonTarget = { kind: "season"; show: ShowRef; season: number };
+export type ShowTarget = { kind: "show"; show: ShowRef };
+/** Something a rating or review can be about. */
 export type ImportTarget = EpisodeTarget | SeasonTarget;
+/** Something a list item can point at: also a whole show. */
+export type ListItemTarget = ImportTarget | ShowTarget;
 
 interface RowBase {
   file: string;
@@ -51,7 +55,7 @@ export interface ReviewRow extends RowBase {
   editedAt: string | null;
 }
 export interface ListItemRow extends RowBase {
-  target: ImportTarget;
+  target: ListItemTarget;
   note: string | null;
 }
 export interface ListDef {
@@ -159,10 +163,16 @@ function episodeTarget(c: Cells): EpisodeTarget {
 /** Rows with a Type column: "Season" rows target a whole season, everything else an episode. */
 function typedTarget(c: Cells): ImportTarget {
   const type = c.get("Type").toLowerCase();
+  if (type === "show") throw new RowError("Ratings and reviews can only be for an episode or a season.");
   if (type === "season" || (type === "" && c.get("Episode") === "")) {
     return { kind: "season", show: showRef(c), season: int(c.get("Season"), "Season", 0) };
   }
   return episodeTarget(c);
+}
+
+/** List rows may also be a whole show (Type "Show"). */
+function listItemTarget(c: Cells): ListItemTarget {
+  return c.get("Type").toLowerCase() === "show" ? { kind: "show", show: showRef(c) } : typedTarget(c);
 }
 
 function eachRow<T>(rows: Cells[] | null, file: string, problems: ImportProblem[], build: (c: Cells) => T): T[] {
@@ -251,7 +261,7 @@ export function parseExportFiles(files: Record<string, string>): ParsedExport {
     list.items = eachRow(read(list.file, ["Show", "Season"]), list.file, problems, (c) => ({
       file: list.file,
       row: c.row,
-      target: typedTarget(c),
+      target: listItemTarget(c),
       note: c.get("Note") || null,
     }));
   }
